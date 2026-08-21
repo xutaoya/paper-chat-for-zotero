@@ -30,6 +30,8 @@ export interface ThemeColors {
   borderColor: string;
   inputBorderColor: string;
   inputFocusBorderColor: string;
+  inputFocusRingColor: string;
+  composerShadow: string;
   // Text
   textPrimary: string;
   textSecondary: string;
@@ -42,6 +44,8 @@ export interface ThemeColors {
   // User accent (bar, bubble, send button)
   userBubbleBg: string;
   userBubbleText: string;
+  sendButtonBg: string;
+  sendButtonText: string;
   // Other
   scrollbarThumb: string;
   scrollbarThumbHover: string;
@@ -59,6 +63,9 @@ export interface SessionInfo {
   titleSource?: "generated" | "user";
   titleGeneratedAt?: number;
   titleEditedAt?: number;
+  lastActiveItemKey?: string | null;
+  lastActiveItemLibraryID?: number;
+  scopeLabel?: string;
 }
 
 // Attachment state for pending uploads

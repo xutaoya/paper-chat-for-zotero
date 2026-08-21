@@ -31,7 +31,9 @@ export function populateProviderList(doc: Document): void {
   clearElement(listContainer);
 
   // Add provider items
-  configs.forEach((config) => {
+  configs
+    .filter((config) => config.id !== "paperchat")
+    .forEach((config) => {
     const item = createProviderListItem(doc, config);
     listContainer.appendChild(item);
   });
@@ -228,7 +230,7 @@ export function populateActiveProviderDropdown(doc: Document): void {
 
   // Add enabled providers
   configs
-    .filter((c) => c.enabled || c.id === "paperchat")
+    .filter((c) => c.enabled && c.id !== "paperchat")
     .forEach((config) => {
       const menuitem = doc.createXULElement("menuitem");
       menuitem.setAttribute("label", config.name);

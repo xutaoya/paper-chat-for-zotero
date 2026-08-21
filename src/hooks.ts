@@ -3,14 +3,13 @@ import {
   registerPrefsScripts,
   togglePaperChatNoticeUI,
 } from "./modules/preferences";
+import { registerMineruPrefsScripts } from "./modules/preferences/MinerUSettingsUI";
 import { createZToolkit } from "./utils/ztoolkit";
 import {
   registerToolbarButton,
   stopChatSearchBackfillForShutdown,
   unregisterChatPanel,
   togglePanel,
-  openPresentationForItem,
-  focusRunningPresentationTask,
 } from "./modules/ui";
 import { getAuthManager, destroyAuthManager } from "./modules/auth";
 import { destroyProviderManager } from "./modules/providers";
@@ -57,18 +56,6 @@ import {
   registerLibraryChatScopeMenus,
   unregisterLibraryChatScopeMenus,
 } from "./modules/ui/LibraryChatScope";
-import {
-  canLaunchChatPresentationForItem,
-  createChatPresentationToolLaunchSession,
-  registerPresentationEntryMenu,
-  registerPresentationTaskFocusHandler,
-  unregisterPresentationEntryMenu,
-  unregisterPresentationTaskFocusHandler,
-} from "./modules/presentation/PresentationEntry";
-import {
-  registerPresentationChatLaunchBridge,
-  unregisterPresentationChatLaunchBridge,
-} from "./modules/presentation/PresentationChatLaunchBridge";
 
 async function onStartup() {
   await Promise.all([
@@ -85,6 +72,14 @@ async function onStartup() {
     id: "paperchat-prefpane",
     src: rootURI + "content/preferences.xhtml",
     label: getString("prefs-title"),
+    image: `chrome://${addon.data.config.addonRef}/content/icons/favicon.svg`,
+  });
+
+  Zotero.PreferencePanes.register({
+    pluginID: addon.data.config.addonID,
+    id: "paperchat-mineru-prefpane",
+    src: rootURI + "content/mineru-preferences.xhtml",
+    label: getString("prefs-mineru-title"),
     image: `chrome://${addon.data.config.addonRef}/content/icons/favicon.svg`,
   });
 
@@ -178,19 +173,6 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   // Register reader-side chat entry points (selection popup + annotation menu)
   registerReaderChatEntries();
   registerLibraryChatScopeMenus();
-  registerPresentationChatLaunchBridge({
-    canLaunch: canLaunchChatPresentationForItem,
-    createSession: createChatPresentationToolLaunchSession,
-  });
-  registerPresentationEntryMenu(openPresentationForItem);
-  registerPresentationTaskFocusHandler((item, location) => {
-    void focusRunningPresentationTask(
-      item,
-      "presentation_button",
-      location.sessionId,
-      location.assistantMessageId,
-    );
-  });
 
   // Register Chat Panel menu in Tools menu
   ztoolkit.Menu.register("menuTools", {
@@ -215,9 +197,6 @@ async function onShutdown(): Promise<void> {
   getAISummaryService().unregisterMenus();
   unregisterReaderChatEntries();
   unregisterLibraryChatScopeMenus();
-  unregisterPresentationEntryMenu();
-  unregisterPresentationChatLaunchBridge();
-  unregisterPresentationTaskFocusHandler();
   // Await so ChatManager.destroy() (session meta write, extraction) finishes
   // before StorageDatabase is torn down below.
   await unregisterChatPanel();
@@ -275,6 +254,9 @@ async function onPrefsEvent(type: string, data: { [key: string]: unknown }) {
   switch (type) {
     case "load":
       registerPrefsScripts(data.window as Window);
+      break;
+    case "mineru-load":
+      await registerMineruPrefsScripts(data.window as Window);
       break;
     case "paperchat-notice-toggle":
       togglePaperChatNoticeUI(data.window as Window);

@@ -32,6 +32,10 @@ import type {
   AddItemArgs,
 } from "../../../types/tool";
 import { getErrorMessage, getItemTitleSmart } from "../../../utils/common";
+import {
+  formatNoteDateTime,
+  withLeadingNoteHeading,
+} from "../../../utils/markdownToNoteHtml";
 
 const PAPERCHAT_NOTES_TITLE = "PaperChat Notes";
 
@@ -129,9 +133,12 @@ function findDedicatedPaperChatNote(
   const noteIDs = parentItem.getNotes?.() || [];
   for (const noteID of noteIDs) {
     const candidate = Zotero.Items.get(noteID);
+    if (!candidate?.isNote?.()) {
+      continue;
+    }
     if (
-      candidate?.isNote?.() &&
-      candidate.getNoteTitle?.() === PAPERCHAT_NOTES_TITLE
+      candidate.getNoteTitle?.() === PAPERCHAT_NOTES_TITLE ||
+      candidate.hasTag?.(PAPERCHAT_NOTES_TITLE)
     ) {
       return candidate;
     }
@@ -1029,7 +1036,6 @@ export async function executeAppendToNote(
       note = new Zotero.Item("note");
       note.libraryID = parentItem.libraryID;
       note.parentID = parentItem.id;
-      note.setNote(`<h1>${escapeHtml(PAPERCHAT_NOTES_TITLE)}</h1>`);
       created = true;
     }
     parentInfo = ` under item "${targetItemKey}"`;
@@ -1038,14 +1044,19 @@ export async function executeAppendToNote(
   const currentHtml = note.getNote?.() || "";
   const appendHtml = noteContentToHtml(content, format);
   const separator = currentHtml.trim() ? "\n<hr/>\n" : "";
-  note.setNote(`${currentHtml}${separator}${appendHtml}`);
+  const merged = `${currentHtml}${separator}${appendHtml}`.trim();
+  note.setNote(
+    noteKey ? merged : withLeadingNoteHeading(merged, formatNoteDateTime()),
+  );
 
   await Zotero.DB.executeTransaction(async () => {
-    await note!.save();
+    if (!noteKey && !note!.hasTag(PAPERCHAT_NOTES_TITLE)) {
+      note!.addTag(PAPERCHAT_NOTES_TITLE);
+    }
     if (created && tags) {
       addTagsToNote(note!, tags);
-      await note!.save();
     }
+    await note!.save();
   });
 
   return `Note appended successfully!\nNote key: ${note.key}${parentInfo}\nCreated new note: ${created ? "yes" : "no"}${created && tags ? `\nTags: ${tags}` : ""}`;

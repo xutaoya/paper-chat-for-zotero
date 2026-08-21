@@ -14,6 +14,7 @@
  * registration is idempotent and torn down at shutdown.
  */
 
+import { config } from "../../../package.json";
 import { getString } from "../../utils/locale";
 import { addSelectedTextAttachment, showPanel } from "./chat-panel";
 import type { ChatPanelOpenSource } from "./chat-panel/ChatPanelManager";
@@ -35,6 +36,8 @@ type AnnotationMenuEvent = {
   reader: ReaderLike;
 };
 
+const READER_ASK_STYLE_ID = "paperchat-reader-ask-style";
+
 let selectionPopupHandler: ((event: SelectionPopupEvent) => void) | undefined;
 let annotationMenuHandler: ((event: AnnotationMenuEvent) => void) | undefined;
 
@@ -53,22 +56,50 @@ function openChatWithSelection(
   addSelectedTextAttachment(trimmed);
 }
 
+function ensureReaderAskStyles(doc: Document): void {
+  if (doc.getElementById(READER_ASK_STYLE_ID)) {
+    return;
+  }
+  const link = doc.createElement("link");
+  link.id = READER_ASK_STYLE_ID;
+  link.rel = "stylesheet";
+  link.href = `chrome://${config.addonRef}/content/reader-ask.css`;
+  doc.head?.appendChild(link);
+}
+
 function buildSelectionPopupButton(
   doc: Document,
   onCommand: () => void,
 ): HTMLElement {
+  ensureReaderAskStyles(doc);
+
+  const row = doc.createElement("div");
+  row.className = "paperchat-reader-ask-row";
+
   const button = doc.createElement("button");
-  button.className = "toolbar-button paperchat-ask-button";
-  button.textContent = getString("chat-reader-ask");
+  button.type = "button";
+  button.className = "paperchat-reader-ask-button";
   button.title = getString("chat-reader-ask-tooltip");
-  button.style.cursor = "pointer";
-  button.style.whiteSpace = "nowrap";
+  button.setAttribute("aria-label", getString("chat-reader-ask-tooltip"));
+
+  const icon = doc.createElement("img");
+  icon.src = `chrome://${config.addonRef}/content/icons/chat-start.svg`;
+  icon.alt = "";
+  icon.setAttribute("aria-hidden", "true");
+
+  const label = doc.createElement("span");
+  label.className = "paperchat-reader-ask-label";
+  label.textContent = getString("chat-reader-ask");
+
+  button.append(icon, label);
   button.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
     onCommand();
   });
-  return button;
+
+  row.appendChild(button);
+  return row;
 }
 
 export function registerReaderChatEntries(): void {

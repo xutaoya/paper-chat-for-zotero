@@ -1,13 +1,6 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { assert } from "chai";
 import { createChatContainer } from "../src/modules/ui/chat-panel/ChatPanelBuilder.ts";
-import {
-  applyThemeToContainer,
-  darkTheme,
-  lightTheme,
-  updateCurrentTheme,
-} from "../src/modules/ui/chat-panel/ChatPanelTheme.ts";
+import { lightTheme } from "../src/modules/ui/chat-panel/ChatPanelTheme.ts";
 
 class FakeElement {
   readonly style: Record<string, string> = {};
@@ -89,7 +82,7 @@ class FakeDocument {
   }
 }
 
-describe("chat panel presentation toolbar entry", function () {
+describe("chat panel toolbar", function () {
   const runtime = globalThis as Record<string, any>;
   let previousAddon: unknown;
   let previousZotero: unknown;
@@ -120,55 +113,28 @@ describe("chat panel presentation toolbar entry", function () {
     runtime.Zotero = previousZotero;
   });
 
-  it("places the PPT action at the far right of the toolbar", function () {
+  it("does not expose the PPT generation action", function () {
+    const doc = new FakeDocument();
+    const container = createChatContainer(
+      doc as unknown as Document,
+      lightTheme,
+    ) as unknown as FakeElement;
+    const presentation = container.querySelector("#chat-generate-presentation");
+
+    assert.isNull(presentation);
+  });
+
+  it("places the sidebar/floating toggle at the far left of the toolbar", function () {
     const doc = new FakeDocument();
     const container = createChatContainer(
       doc as unknown as Document,
       lightTheme,
     ) as unknown as FakeElement;
     const primary = container.querySelector("#chat-toolbar-primary-actions");
-    const secondary = container.querySelector(
-      "#chat-toolbar-secondary-actions",
-    );
-    const presentation = container.querySelector("#chat-generate-presentation");
+    const panelMode = container.querySelector("#chat-panel-mode-btn");
 
     assert.isNotNull(primary);
-    assert.isNotNull(secondary);
-    assert.strictEqual(presentation?.parentElement, secondary);
-    assert.equal(
-      secondary?.children.at(-1)?.getAttribute("id"),
-      "chat-generate-presentation",
-    );
-    assert.notInclude(primary?.children || [], presentation);
-  });
-
-  it("updates the PPT button with the rest of the toolbar in dark mode", function () {
-    const doc = new FakeDocument();
-    const container = createChatContainer(
-      doc as unknown as Document,
-      lightTheme,
-    ) as unknown as FakeElement;
-    const presentation = container.querySelector("#chat-generate-presentation");
-
-    updateCurrentTheme();
-    applyThemeToContainer(container as unknown as HTMLElement);
-
-    assert.equal(presentation?.style.background, darkTheme.buttonBg);
-    assert.equal(presentation?.style.borderColor, darkTheme.inputBorderColor);
-    assert.equal(presentation?.style.color, darkTheme.textPrimary);
-  });
-
-  it("uses the supplied presentation-screen geometry with the shared icon theme", function () {
-    const iconPath = fileURLToPath(
-      new URL("../addon/content/icons/presentation.svg", import.meta.url),
-    );
-    const icon = readFileSync(iconPath, "utf8");
-
-    assert.include(icon, "M4 8H44");
-    assert.include(icon, "M8 8H40V34H8V8Z");
-    assert.include(icon, "M22 16L27 21L22 26");
-    assert.include(icon, "M16 42L24 34L32 42");
-    assert.include(icon, "@media (prefers-color-scheme: dark)");
-    assert.include(icon, ".icon-stroke { stroke: #e0e0e0; }");
+    assert.strictEqual(panelMode?.parentElement, primary);
+    assert.equal(primary?.children[0]?.getAttribute("id"), "chat-panel-mode-btn");
   });
 });

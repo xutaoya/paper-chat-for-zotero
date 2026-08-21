@@ -409,6 +409,9 @@ export interface SessionMeta {
   titleSource?: "generated" | "user";
   titleGeneratedAt?: number;
   titleEditedAt?: number;
+  lastActiveItemKey?: string | null;
+  lastActiveItemLibraryID?: number;
+  scopeLabel?: string;
 }
 
 // 聊天会话 (独立于 item，支持跨 item 对话)

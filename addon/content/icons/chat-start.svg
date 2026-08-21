@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .icon-stroke { stroke: #64748b; }
+    .icon-fill { fill: #64748b; }
+    @media (prefers-color-scheme: dark) {
+      .icon-stroke { stroke: #94a3b8; }
+      .icon-fill { fill: #94a3b8; }
+    }
+  </style>
+  <path
+    d="M8 10C8 7.79086 9.79086 6 12 6H36C38.2091 6 40 7.79086 40 10V28C40 30.2091 38.2091 32 36 32H22L14 38V32H12C9.79086 32 8 30.2091 8 28V10Z"
+    class="icon-stroke"
+    stroke-width="3"
+    stroke-linejoin="round"
+  />
+  <circle cx="18" cy="19" r="2.5" class="icon-fill" />
+  <circle cx="24" cy="19" r="2.5" class="icon-fill" />
+  <circle cx="30" cy="19" r="2.5" class="icon-fill" />
+</svg>

@@ -280,7 +280,11 @@ export function updateChatHistoryScrollBottomButton(
   button.setAttribute("aria-hidden", shouldShow ? "false" : "true");
   button.setAttribute("data-visible", shouldShow ? "true" : "false");
 }
-import { createElement, copyToClipboard } from "./ChatPanelBuilder";
+import {
+  createChatEmptyStateIcon,
+  createElement,
+  copyToClipboard,
+} from "./ChatPanelBuilder";
 import { getString } from "../../../utils/locale";
 import {
   getPaperChatErrorDisplayMessage,
@@ -1520,12 +1524,7 @@ function createChatEmptyState(doc: Document, theme: ThemeColors): HTMLElement {
     { id: "chat-empty-state" },
   );
 
-  const emptyIcon = createElement(doc, "div", {
-    fontSize: "48px",
-    marginBottom: "16px",
-    opacity: "0.6",
-  });
-  emptyIcon.textContent = "\uD83D\uDCAC";
+  const emptyIcon = createChatEmptyStateIcon(doc);
 
   const emptyText = createElement(doc, "div", {
     fontSize: "15px",

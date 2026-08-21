@@ -1386,6 +1386,62 @@ export class SessionStorageService {
   }
 
   /**
+   * Find the most recently updated session that has messages for one item.
+   */
+  async findLatestSessionIdForItem(
+    itemKey: string,
+    libraryID: number,
+  ): Promise<string | null> {
+    await this.init();
+
+    const normalizedItemKey = itemKey.trim();
+    if (!normalizedItemKey) {
+      return null;
+    }
+
+    const userLibraryID = Zotero.Libraries.userLibraryID;
+    const resolvedLibraryID = Number.isSafeInteger(libraryID)
+      ? libraryID
+      : userLibraryID;
+
+    try {
+      const db = await getStorageDatabase().ensureInit();
+      const rows =
+        (await db.queryAsync(
+          `SELECT s.id
+           FROM sessions s
+           INNER JOIN session_meta m ON m.id = s.id
+           WHERE s.last_active_item_key = ?
+             AND m.message_count > 0
+             AND (
+               s.last_active_item_library_id = ?
+               OR (
+                 s.last_active_item_library_id IS NULL
+                 AND ? = ?
+               )
+             )
+           ORDER BY m.updated_at DESC
+           LIMIT 1`,
+          [
+            normalizedItemKey,
+            resolvedLibraryID,
+            resolvedLibraryID,
+            userLibraryID,
+          ],
+        )) || [];
+
+      const row = rows[0] as { id?: string } | undefined;
+      return typeof row?.id === "string" && row.id ? row.id : null;
+    } catch (error) {
+      ztoolkit.log(
+        "[SessionStorageService] Find latest item session error:",
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * 列出所有 session (返回元数据列表)
    */
   async listSessions(): Promise<SessionMeta[]> {
@@ -1395,7 +1451,11 @@ export class SessionStorageService {
       const db = await getStorageDatabase().ensureInit();
       const rows =
         (await db.queryAsync(
-          "SELECT * FROM session_meta WHERE message_count > 0 ORDER BY updated_at DESC",
+          `SELECT sm.*, s.last_active_item_key, s.last_active_item_library_id, s.scope_label
+           FROM session_meta sm
+           LEFT JOIN sessions s ON s.id = sm.id
+           WHERE sm.message_count > 0
+           ORDER BY sm.updated_at DESC`,
         )) || [];
 
       return rows.map((row: any) => ({
@@ -1411,6 +1471,19 @@ export class SessionStorageService {
           row.title_generated_at != null ? row.title_generated_at : undefined,
         titleEditedAt:
           row.title_edited_at != null ? row.title_edited_at : undefined,
+        lastActiveItemKey:
+          typeof row.last_active_item_key === "string"
+            ? row.last_active_item_key
+            : null,
+        lastActiveItemLibraryID:
+          Number.isSafeInteger(row.last_active_item_library_id) &&
+          Number(row.last_active_item_library_id) > 0
+            ? Number(row.last_active_item_library_id)
+            : undefined,
+        scopeLabel:
+          typeof row.scope_label === "string" && row.scope_label.trim()
+            ? row.scope_label.trim()
+            : undefined,
       }));
     } catch (error) {
       ztoolkit.log("[SessionStorageService] List sessions error:", error);

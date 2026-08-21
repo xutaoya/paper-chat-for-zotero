@@ -152,11 +152,6 @@ import {
 import type { PresentationLaunchAuthorization } from "../presentation/PresentationLaunchAuthorization";
 import { isIssuedPresentationLaunchAuthorization } from "../presentation/PresentationLaunchAuthorization";
 import type { PresentationToolLaunchSession } from "../presentation/PresentationToolLaunchSession";
-import {
-  canLaunchPresentationFromChat,
-  createPresentationChatLaunchSession,
-} from "../presentation/PresentationChatLaunchBridge";
-import { extractPresentationRetrySources } from "../presentation/PresentationSourceContext";
 // V1 migration now handled by migrateToSQLite.ts at startup
 
 const SUPPRESS_AUTOMATIC_RETRY = "paperChatSuppressAutomaticRetry";
@@ -919,10 +914,7 @@ export class ChatManager {
         hasCurrentItem,
         undefined,
         {
-          includePresentationLauncher:
-            provider?.config.id === "paperchat" &&
-            provider.config.type === "paperchat" &&
-            canLaunchPresentationFromChat(hasCurrentItem ? item! : null),
+          includePresentationLauncher: false,
         },
       );
       const searchScopeGateEnabled =
@@ -1080,55 +1072,108 @@ export class ChatManager {
     libraryID?: number,
   ): Promise<ChatSession> {
     await this.init();
-    return this.enqueueSessionNavigation(async () => {
-      const normalizedItemKey = itemKey.trim();
-      const normalizedTitle = title.trim();
-      if (!normalizedItemKey) {
-        throw new Error("Cannot create a paper chat without an item key.");
-      }
-      if (!normalizedTitle) {
-        throw new Error("Cannot create a paper chat without a title.");
-      }
+    return this.enqueueSessionNavigation(() =>
+      this.createItemSessionLocked(itemKey, title, libraryID),
+    );
+  }
 
-      const previousSession = this.currentSession;
-      const sessionId = generateTimestampId();
-      const now = Date.now();
-      let session: ChatSession | null = null;
+  /**
+   * Activate the latest conversation for an item, or start a fresh one.
+   */
+  async activateSessionForItem(item: Zotero.Item): Promise<ChatSession> {
+    await this.init();
+    return this.enqueueSessionNavigation(() =>
+      this.activateSessionForItemLocked(item),
+    );
+  }
 
-      try {
-        session = await this.sessionStorage.createSession({
-          sessionId,
-          lastActiveItemKey: normalizedItemKey,
-          lastActiveItemLibraryID: Number.isSafeInteger(libraryID)
-            ? libraryID
-            : undefined,
-          title: normalizedTitle,
-          titleSource: "user",
-          titleEditedAt: now,
-          activate: false,
-        });
-        await this.sessionStorage.setActiveSession(session.id);
-      } catch (error) {
-        if (session) {
-          await this.sessionStorage
-            .deleteSession(session.id)
-            .catch(() => undefined);
-        }
-        throw error;
+  private async createItemSessionLocked(
+    itemKey: string,
+    title: string,
+    libraryID?: number,
+  ): Promise<ChatSession> {
+    const normalizedItemKey = itemKey.trim();
+    const normalizedTitle = title.trim();
+    if (!normalizedItemKey) {
+      throw new Error("Cannot create a paper chat without an item key.");
+    }
+    if (!normalizedTitle) {
+      throw new Error("Cannot create a paper chat without a title.");
+    }
+
+    const previousSession = this.currentSession;
+    const sessionId = generateTimestampId();
+    const now = Date.now();
+    let session: ChatSession | null = null;
+
+    try {
+      session = await this.sessionStorage.createSession({
+        sessionId,
+        lastActiveItemKey: normalizedItemKey,
+        lastActiveItemLibraryID: Number.isSafeInteger(libraryID)
+          ? libraryID
+          : undefined,
+        title: normalizedTitle,
+        titleSource: "user",
+        titleEditedAt: now,
+        activate: false,
+      });
+      await this.sessionStorage.setActiveSession(session.id);
+    } catch (error) {
+      if (session) {
+        await this.sessionStorage
+          .deleteSession(session.id)
+          .catch(() => undefined);
       }
+      throw error;
+    }
 
-      this.memoryManager.onBeforeSessionSwitch(previousSession, session.id);
-      this.maybeGenerateSessionTitle(previousSession, session.id);
-      this.currentSession = session;
-      await this.sessionStorage.cleanupAbandonedDraftSessions();
-      this.applySessionItemContext(session);
-      this.reconcileApprovalState(session);
-      this.reconcileUserInputRequestState(session);
-      this.onMessageUpdate?.(session.messages);
-      this.onExecutionPlanUpdate?.(session.executionPlan);
-      this.notifySessionListUpdated();
-      return session;
-    });
+    this.memoryManager.onBeforeSessionSwitch(previousSession, session.id);
+    this.maybeGenerateSessionTitle(previousSession, session.id);
+    this.currentSession = session;
+    await this.sessionStorage.cleanupAbandonedDraftSessions();
+    this.applySessionItemContext(session);
+    this.reconcileApprovalState(session);
+    this.reconcileUserInputRequestState(session);
+    this.onMessageUpdate?.(session.messages);
+    this.onExecutionPlanUpdate?.(session.executionPlan);
+    this.notifySessionListUpdated();
+    return session;
+  }
+
+  private async activateSessionForItemLocked(
+    item: Zotero.Item,
+  ): Promise<ChatSession> {
+    const itemKey = item.key;
+    const libraryID = Number.isSafeInteger(item.libraryID)
+      ? item.libraryID
+      : Zotero.Libraries.userLibraryID;
+    const userLibraryID = Zotero.Libraries.userLibraryID;
+    const current = this.currentSession;
+
+    if (
+      current &&
+      current.lastActiveItemKey === itemKey &&
+      (current.lastActiveItemLibraryID ?? userLibraryID) === libraryID
+    ) {
+      this.applySessionItemContext(current);
+      return current;
+    }
+
+    const existingSessionId =
+      await this.sessionStorage.findLatestSessionIdForItem(itemKey, libraryID);
+    if (existingSessionId) {
+      const session = await this.switchSessionLocked(existingSessionId);
+      if (session) {
+        return session;
+      }
+    }
+
+    return this.createItemSessionLocked(
+      itemKey,
+      getItemTitleSmart(item) || itemKey,
+      libraryID,
+    );
   }
 
   private async createNewSessionLocked(): Promise<ChatSession> {
@@ -1792,10 +1837,6 @@ export class ChatManager {
       );
       return false;
     }
-    const presentationMentionSources = extractPresentationRetrySources(
-      content,
-      sendingSession.messages,
-    );
     const reusedUserMessage = options.reuseUserMessageId
       ? sendingSession.messages.find(
           (message) =>
@@ -2205,29 +2246,6 @@ export class ChatManager {
           sendingSession.id,
           assistantMessage,
         );
-      }
-      if (
-        !options.allowedToolNames &&
-        !options.presentationAuthorization &&
-        !options.noteSummaryContext &&
-        provider.config?.id === "paperchat" &&
-        provider.config?.type === "paperchat" &&
-        (canLaunchPresentationFromChat(hasCurrentItem ? item! : null) ||
-          presentationMentionSources.length > 0)
-      ) {
-        presentationLaunchSession =
-          createPresentationChatLaunchSession(
-            hasCurrentItem ? item! : null,
-            {
-              sessionId: sendingSession.id,
-              assistantMessageId: assistantMessage.id,
-            },
-            {
-              abortSignal,
-              mentionSources: presentationMentionSources,
-              paperChatTier: sendingSession.selectedTier,
-            },
-          ) || undefined;
       }
       if (options.onAssistantMessageCreated) {
         try {
@@ -2686,14 +2704,8 @@ export class ChatManager {
         hasCurrentItem,
         selectedSearchScope,
         {
-          includePresentation:
-            !!presentationAuthorization ||
-            !!presentationLaunchSession?.getAuthorization(),
-          includePresentationLauncher:
-            !!presentationLaunchSession &&
-            !presentationLaunchSession.getAuthorization() &&
-            provider?.config.id === "paperchat" &&
-            provider.config.type === "paperchat",
+          includePresentation: false,
+          includePresentationLauncher: false,
         },
       );
       const allowedTools = allowedToolNameSet

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .icon-stroke { stroke: #333; }
+    @media (prefers-color-scheme: dark) {
+      .icon-stroke { stroke: #e0e0e0; }
+    }
+  </style>
+  <path
+    d="M9 11C9 8.79086 10.7909 7 13 7H33C35.2091 7 37 8.79086 37 11V25C37 27.2091 35.2091 29 33 29H21L13 35V29H13C10.7909 29 9 27.2091 9 25V11Z"
+    class="icon-stroke"
+    stroke-width="4"
+    stroke-linejoin="round"
+  />
+  <path d="M15 15H29" class="icon-stroke" stroke-width="4" stroke-linecap="round" />
+  <path d="M15 21H23" class="icon-stroke" stroke-width="4" stroke-linecap="round" />
+  <path d="M18 28L32 14" class="icon-stroke" stroke-width="4" stroke-linecap="round" />
+</svg>

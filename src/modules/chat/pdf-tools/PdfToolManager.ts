@@ -64,6 +64,7 @@ import {
   isValidWebSearchArgs,
 } from "../web-search";
 import { preflightToolArguments } from "../tool-arguments/ToolArgumentPreflight";
+import { parsePdfAttachmentText } from "../MinerUParser";
 import { parsePaperStructure, parsePages } from "./paperParser";
 import {
   extractNativeOutline,
@@ -115,27 +116,14 @@ import {
 } from "./libraryExecutors";
 import { getErrorMessage } from "../../../utils/common";
 import {
-  isAbortRequested,
   raceWithAbort,
   throwIfAborted,
 } from "../../../utils/abort";
 import {
   createPresentationLaunchToolDefinition,
   createPresentationToolDefinition,
-  executePresentationCapability,
 } from "../../presentation";
-import type { PresentationDesignSystem } from "../../presentation/PresentationLaunchSettings";
-import {
-  beginPresentationAuthorizationAttempt,
-  finishPresentationAuthorizationAttempt,
-  isIssuedPresentationLaunchAuthorization,
-  type PresentationAuthorizationBlockReason,
-} from "../../presentation/PresentationLaunchAuthorization";
 import type { ToolSchedulerExecutionContext } from "../tool-scheduler/ToolScheduler";
-import {
-  formatToolError,
-  parseToolError,
-} from "../tool-errors/ToolErrorFormatter";
 import {
   createDownloadToolDefinition,
   executeDownloadCapability,
@@ -146,38 +134,6 @@ interface CacheEntry {
   structure: PaperStructureExtended;
   timestamp: number;
   attachmentItemID: number;
-}
-
-function classifyPresentationAttemptResult(
-  result: string,
-): "completed" | "retryable_failure" | "terminal_failure" {
-  const error = parseToolError(result);
-  if (!error) return "completed";
-  return error.retryable === true ? "retryable_failure" : "terminal_failure";
-}
-
-function formatPresentationAuthorizationBlock(
-  reason: PresentationAuthorizationBlockReason,
-): string {
-  const causes: Record<PresentationAuthorizationBlockReason, string> = {
-    not_issued: "The guarded PaperChat launch authorization is unavailable.",
-    already_running:
-      "A presentation is already being generated with this authorization.",
-    already_completed:
-      "This launch authorization has already exported a presentation.",
-    terminal_failure:
-      "This launch authorization ended after a non-retryable failure.",
-    attempts_exhausted:
-      "This launch authorization has exhausted its bounded retry allowance.",
-  };
-  return formatToolError({
-    summary: "Presentation launch authorization cannot start another deck.",
-    category: "permission_denied",
-    retryable: false,
-    cause: causes[reason],
-    suggestedFix:
-      "Finish this turn without another presentation call. A new user launch requires a fresh balance check and confirmation.",
-  });
 }
 
 export class PdfToolManager {
@@ -265,6 +221,32 @@ export class PdfToolManager {
     return null;
   }
 
+  private async extractAttachmentTextWithFallback(
+    attachment: Zotero.Item,
+    itemKey: string,
+    abortSignal?: AbortSignal,
+  ): Promise<string | null> {
+    try {
+      const pdfText = await raceWithAbort(
+        () => attachment.attachmentText,
+        abortSignal,
+      );
+      throwIfAborted(abortSignal);
+      if (pdfText) {
+        return pdfText;
+      }
+    } catch (error) {
+      throwIfAborted(abortSignal);
+      ztoolkit.log(
+        `[PdfToolManager] Error extracting PDF text for ${itemKey}:`,
+        getErrorMessage(error),
+      );
+    }
+
+    throwIfAborted(abortSignal);
+    return parsePdfAttachmentText(attachment);
+  }
+
   /**
    * 根据 itemKey 提取 PDF 文本并解析结构（带缓存）
    */
@@ -310,11 +292,11 @@ export class PdfToolManager {
       item.isPDFAttachment()
     ) {
       try {
-        const pdfText = await raceWithAbort(
-          () => item.attachmentText,
+        const pdfText = await this.extractAttachmentTextWithFallback(
+          item,
+          itemKey,
           abortSignal,
         );
-        throwIfAborted(abortSignal);
         if (pdfText) {
           structure = this.parsePaperStructure(pdfText);
           attachmentItemID = item.id;
@@ -345,8 +327,9 @@ export class PdfToolManager {
             attachment.isPDFAttachment()
           ) {
             // 提取 PDF 文本
-            const pdfText = await raceWithAbort(
-              () => attachment.attachmentText,
+            const pdfText = await this.extractAttachmentTextWithFallback(
+              attachment,
+              itemKey,
               abortSignal,
             );
             throwIfAborted(abortSignal);
@@ -1875,140 +1858,9 @@ export class PdfToolManager {
         }
         return this.executeSaveMemory(args);
       }
-      case "request_presentation": {
-        const launchSession = executionContext?.presentationLaunchSession;
-        if (!launchSession) {
-          return "The guarded PaperChat presentation launcher is unavailable in this turn. Do not call presentation directly.";
-        }
-        const launchResult = await launchSession.requestAuthorization({
-          sourceItemKey:
-            typeof args.sourceItemKey === "string"
-              ? args.sourceItemKey
-              : undefined,
-          sourceLibraryID:
-            typeof args.sourceLibraryID === "number"
-              ? args.sourceLibraryID
-              : undefined,
-          slideCount:
-            typeof args.slideCount === "number" ? args.slideCount : undefined,
-          designSystem:
-            typeof args.designSystem === "string"
-              ? (args.designSystem as PresentationDesignSystem)
-              : undefined,
-          instructions:
-            typeof args.instructions === "string"
-              ? args.instructions
-              : undefined,
-        });
-        if (launchResult.allowed) {
-          const authorizedSource = launchResult.authorization.source;
-          return `The user confirmed PaperChat's native presentation settings. The private presentation tool is now available for the authorized Zotero paper (${authorizedSource.itemKey}, library ${authorizedSource.libraryID}). Call presentation now with {"sourceItemKey":"${authorizedSource.itemKey}"}. Do not ask for another confirmation and do not change the confirmed slide count, style, or custom instructions.`;
-        }
-        const blockedMessages: Record<typeof launchResult.reason, string> = {
-          provider:
-            "The guarded presentation launch stopped because PaperChat is no longer the active provider. Do not call presentation.",
-          login:
-            "The guarded presentation launch stopped because the PaperChat account is not logged in. Do not call presentation.",
-          balance:
-            "The guarded presentation launch stopped because the cached available token balance does not meet the required threshold. The plugin already showed the purchase option. Do not call presentation.",
-          cancelled:
-            "The user cancelled the native presentation settings window. Do not call presentation or ask for the same settings again in this turn.",
-          source_unavailable:
-            "The requested Zotero paper could not be resolved to one item with a PDF. Ask the user to select or mention exactly one paper, then try the presentation launcher again.",
-          source_ambiguous:
-            "More than one Zotero paper was mentioned or matched the requested key. Ask the user to choose exactly one paper before starting the presentation.",
-          already_active:
-            "A presentation for this paper is already being configured or generated. PaperChat focused the existing settings window or task card. Do not start a duplicate presentation.",
-          capacity_exceeded:
-            "PaperChat already has the maximum number of presentation tasks running. The plugin showed the concurrency notice. Do not call presentation.",
-          turn_finished:
-            "This chat turn ended before presentation authorization was issued. Do not call presentation.",
-          launch_failed:
-            "The native presentation launch failed before authorization was issued. Do not call presentation directly.",
-        };
-        return blockedMessages[launchResult.reason];
-      }
+      case "request_presentation":
       case "presentation": {
-        const presentationAuthorization =
-          executionContext?.presentationAuthorization;
-        if (
-          !isIssuedPresentationLaunchAuthorization(presentationAuthorization) ||
-          !presentationAuthorization.source.itemKey ||
-          !Number.isSafeInteger(presentationAuthorization.source.libraryID)
-        ) {
-          return "Error: Presentation generation must be started from a PaperChat PPT entry after its balance check and confirmation.";
-        }
-        const requestedSourceItemKey =
-          typeof args.sourceItemKey === "string" && args.sourceItemKey.trim()
-            ? args.sourceItemKey.trim()
-            : undefined;
-        if (
-          requestedSourceItemKey &&
-          requestedSourceItemKey !== presentationAuthorization.source.itemKey
-        ) {
-          return "Error: The presentation source does not match the paper authorized by the user.";
-        }
-        const sourceContext = presentationAuthorization.source;
-        const sourceItemKey = sourceContext.itemKey;
-        throwIfAborted(abortSignal);
-        const attempt = beginPresentationAuthorizationAttempt(
-          presentationAuthorization,
-        );
-        if (!attempt.allowed) {
-          return formatPresentationAuthorizationBlock(attempt.reason);
-        }
-        try {
-          const paper = sourceItemKey
-            ? await this.extractAndParsePaper(
-                sourceItemKey,
-                true,
-                sourceContext?.libraryID,
-                abortSignal,
-              )
-            : fallbackStructure
-              ? this.ensureExtendedStructure(fallbackStructure)
-              : null;
-          const authorizedArgs: Record<string, unknown> = {
-            ...args,
-            // The app-owned capability is the source of truth. Never let a
-            // later model round redirect planning metadata to another library
-            // after the user has confirmed the native settings.
-            sourceItemKey,
-            sourceLibraryID: sourceContext.libraryID,
-            // These values come from the visible settings window and are
-            // frozen in the app-owned authorization. The outer chat model
-            // cannot silently change them, including on a retry.
-            slideCount: presentationAuthorization.settings.slideCount,
-            designSystem: presentationAuthorization.settings.designSystem,
-          };
-          delete authorizedArgs.instructions;
-          if (presentationAuthorization.settings.userInstructions) {
-            authorizedArgs.instructions =
-              presentationAuthorization.settings.userInstructions;
-          }
-          const result = await executePresentationCapability(
-            authorizedArgs,
-            executionContext?.presentationVisualReviewer,
-            executionContext?.presentationPlanner,
-            paper || undefined,
-            executionContext?.presentationProgress,
-            undefined,
-            sourceContext,
-            abortSignal,
-          );
-          finishPresentationAuthorizationAttempt(
-            presentationAuthorization,
-            classifyPresentationAttemptResult(result),
-          );
-          return result;
-        } catch (error) {
-          const cancelled = isAbortRequested(abortSignal);
-          finishPresentationAuthorizationAttempt(
-            presentationAuthorization,
-            cancelled ? "cancelled" : "retryable_failure",
-          );
-          throw error;
-        }
+        return "PPT generation is not available.";
       }
     }
 

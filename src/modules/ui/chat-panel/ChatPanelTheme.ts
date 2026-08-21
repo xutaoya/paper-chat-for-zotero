@@ -20,8 +20,10 @@ export const lightTheme: ThemeColors = {
   dropdownItemHoverBg: "#f5f5f5",
   hoverBg: "#f0f0f0",
   borderColor: "#e0e0e0",
-  inputBorderColor: "#ddd",
-  inputFocusBorderColor: "#6b7280",
+  inputBorderColor: "#d1d5db",
+  inputFocusBorderColor: "#9ca3af",
+  inputFocusRingColor: "rgba(17, 24, 39, 0.08)",
+  composerShadow: "0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06)",
   textPrimary: "#333",
   textSecondary: "#555",
   textMuted: "#888",
@@ -31,6 +33,8 @@ export const lightTheme: ThemeColors = {
   codeBlockColor: "#d4d4d4",
   userBubbleBg: "#e5e7eb",
   userBubbleText: "#374151",
+  sendButtonBg: "#111827",
+  sendButtonText: "#ffffff",
   scrollbarThumb: "#c1c1c1",
   scrollbarThumbHover: "#a1a1a1",
 };
@@ -50,8 +54,10 @@ export const darkTheme: ThemeColors = {
   dropdownItemHoverBg: "#3d3d3d",
   hoverBg: "#383838",
   borderColor: "#444",
-  inputBorderColor: "#555",
+  inputBorderColor: "#4b5563",
   inputFocusBorderColor: "#9ca3af",
+  inputFocusRingColor: "rgba(243, 244, 246, 0.12)",
+  composerShadow: "0 1px 2px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.28)",
   textPrimary: "#e0e0e0",
   textSecondary: "#ccc",
   textMuted: "#999",
@@ -61,6 +67,8 @@ export const darkTheme: ThemeColors = {
   codeBlockColor: "#d4d4d4",
   userBubbleBg: "linear-gradient(135deg, #6b7280 0%, #4b5563 100%)",
   userBubbleText: "#ffffff",
+  sendButtonBg: "#f3f4f6",
+  sendButtonText: "#111827",
   scrollbarThumb: "#555",
   scrollbarThumbHover: "#666",
 };
@@ -160,7 +168,7 @@ export function applyThemeToContainer(container: HTMLElement): void {
   const toolbar = container.querySelector("#chat-toolbar") as HTMLElement;
   if (toolbar) {
     toolbar.style.background = theme.toolbarBg;
-    toolbar.style.borderTopColor = theme.borderColor;
+    toolbar.style.borderBottomColor = theme.borderColor;
   }
 
   // PDF label
@@ -172,12 +180,12 @@ export function applyThemeToContainer(container: HTMLElement): void {
   // Toolbar buttons
   container
     .querySelectorAll(
-      "#chat-new, #chat-upload-file, #chat-history-btn, #chat-summarize-conversation-note, #chat-generate-presentation",
+      "#chat-panel-mode-btn, #chat-new, #chat-upload-file, #chat-history-btn, #chat-clear-conversation, #chat-summarize-conversation-note",
     )
     .forEach((btn: Element) => {
       const el = btn as HTMLElement;
-      el.style.background = theme.buttonBg;
-      el.style.borderColor = theme.inputBorderColor;
+      el.style.background = "transparent";
+      el.style.borderColor = "transparent";
       el.style.color = theme.textPrimary;
     });
 
@@ -200,9 +208,19 @@ export function applyThemeToContainer(container: HTMLElement): void {
       inputArea.style.background = theme.inputAreaBg;
       inputArea.style.borderTopColor = theme.borderColor;
     }
-    // Input wrapper background and border
     inputWrapper.style.background = theme.inputBg;
     inputWrapper.style.borderColor = theme.inputBorderColor;
+    inputWrapper.style.boxShadow = theme.composerShadow;
+    inputWrapper.setAttribute(
+      "data-focus-border-color",
+      theme.inputFocusBorderColor,
+    );
+    inputWrapper.setAttribute("data-idle-border-color", theme.inputBorderColor);
+    inputWrapper.setAttribute(
+      "data-focus-ring-color",
+      theme.inputFocusRingColor,
+    );
+    inputWrapper.setAttribute("data-idle-shadow", theme.composerShadow);
   }
 
   // Message input
@@ -247,7 +265,7 @@ export function applyThemeToContainer(container: HTMLElement): void {
   ) as HTMLElement;
   if (modelSelectorBtn) {
     modelSelectorBtn.style.background = theme.buttonBg;
-    modelSelectorBtn.style.borderColor = theme.inputBorderColor;
+    modelSelectorBtn.style.borderColor = "transparent";
     modelSelectorBtn.style.color = theme.textSecondary;
   }
 
@@ -364,8 +382,18 @@ export function applyThemeToContainer(container: HTMLElement): void {
     "#chat-send-button",
   ) as HTMLElement;
   if (sendButton) {
-    sendButton.style.background = theme.userBubbleBg;
-    sendButton.style.color = theme.userBubbleText;
+    sendButton.style.width = "32px";
+    sendButton.style.height = "32px";
+    sendButton.style.minWidth = "32px";
+    sendButton.style.minHeight = "32px";
+    sendButton.style.borderRadius = "50%";
+    sendButton.style.background = theme.sendButtonBg;
+    sendButton.style.color = theme.sendButtonText;
+    const sendIcon = sendButton.querySelector("#chat-send-icon") as HTMLElement;
+    if (sendIcon) {
+      sendIcon.style.filter =
+        theme === darkTheme ? "brightness(0)" : "brightness(0) invert(1)";
+    }
   }
 
   // Update existing user message bubbles
@@ -406,7 +434,9 @@ export function applyThemeToContainer(container: HTMLElement): void {
       (quote as HTMLElement).style.borderLeftColor = theme.textMuted;
     });
   container
-    .querySelectorAll(".pending-quoted-message, .pending-image-attachment")
+    .querySelectorAll(
+      ".pending-quoted-message, .pending-image-attachment, .pending-selected-text",
+    )
     .forEach((tag: Element) => {
       const el = tag as HTMLElement;
       el.style.background = theme.inputBg;
@@ -415,7 +445,7 @@ export function applyThemeToContainer(container: HTMLElement): void {
     });
   container
     .querySelectorAll(
-      ".pending-quoted-message button, .pending-image-attachment button",
+      ".pending-quoted-message button, .pending-image-attachment button, .pending-selected-text button",
     )
     .forEach((button: Element) => {
       (button as HTMLElement).style.color = theme.textSecondary;

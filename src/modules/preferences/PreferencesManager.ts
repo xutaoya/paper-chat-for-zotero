@@ -44,7 +44,7 @@ import { ANALYTICS_EVENTS, getAnalyticsService } from "../analytics";
 import { refreshPaperChatNoticeUI } from "./PaperChatNoticeRenderer";
 
 // Current selected provider ID
-let currentProviderId: string = "paperchat";
+let currentProviderId: string = "openai";
 const PAPER_SKILLS_ROOT = "skills";
 
 const TOOL_PERMISSION_MODE_L10N: Record<ToolPermissionMode, string> = {

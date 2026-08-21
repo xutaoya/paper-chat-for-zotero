@@ -29,12 +29,7 @@ import type {
 } from "../tool-scheduler";
 import type { ToolSchedulerExecutionContext } from "../tool-scheduler/ToolScheduler";
 import type { PresentationLaunchAuthorization } from "../../presentation/PresentationLaunchAuthorization";
-import { createPresentationToolDefinition } from "../../presentation/PresentationCapability";
-import {
-  createPresentationLaunchToolDefinition,
-  PRESENTATION_LAUNCH_TOOL_NAME,
-  type PresentationToolLaunchSession,
-} from "../../presentation/PresentationToolLaunchSession";
+import type { PresentationToolLaunchSession } from "../../presentation/PresentationToolLaunchSession";
 import { ExecutionPlanManager } from "./ExecutionPlanManager";
 import {
   createReusedCompletedToolResult,
@@ -234,32 +229,10 @@ interface ToolIterationParams {
 }
 
 function syncPresentationLaunchTools(
-  tools: ToolDefinition[],
-  launchSession: PresentationToolLaunchSession | undefined,
+  _tools: ToolDefinition[],
+  _launchSession: PresentationToolLaunchSession | undefined,
 ): void {
-  if (!launchSession) return;
-  const authorization = launchSession.getAuthorization();
-  const desiredToolName = authorization
-    ? "presentation"
-    : PRESENTATION_LAUNCH_TOOL_NAME;
-  for (let index = tools.length - 1; index >= 0; index -= 1) {
-    const name = tools[index].function.name;
-    if (
-      (name === "presentation" || name === PRESENTATION_LAUNCH_TOOL_NAME) &&
-      name !== desiredToolName
-    ) {
-      tools.splice(index, 1);
-    }
-  }
-  if (tools.some((tool) => tool.function.name === desiredToolName)) return;
-  tools.push(
-    authorization
-      ? createPresentationToolDefinition()
-      : createPresentationLaunchToolDefinition(),
-  );
-  tools.sort((left, right) =>
-    left.function.name.localeCompare(right.function.name),
-  );
+  return;
 }
 
 function reservePresentationLaunchHandoffIterations(

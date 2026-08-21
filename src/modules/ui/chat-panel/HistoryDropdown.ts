@@ -45,6 +45,44 @@ function formatTimestamp(timestamp: number): string {
     : `${date.getFullYear()}/${month}/${day} ${hours}:${minutes}`;
 }
 
+export function sanitizeMessagePreview(text: string): string {
+  if (!text) return "";
+  let cleaned = text.replace(/<tool-call[\s\S]*?<\/tool-call>/gi, " ");
+  cleaned = cleaned.replace(/<[^>]+>/g, " ");
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  return cleaned;
+}
+
+export function resolveSessionLiteratureLabel(
+  session: SessionInfo,
+): string | null {
+  if (session.scopeLabel) {
+    return session.scopeLabel;
+  }
+  if (!session.lastActiveItemKey) {
+    return null;
+  }
+  try {
+    const libraryID =
+      session.lastActiveItemLibraryID ?? Zotero.Libraries.userLibraryID;
+    const item = Zotero.Items.getByLibraryAndKey(
+      libraryID,
+      session.lastActiveItemKey,
+    );
+    if (!item) {
+      return null;
+    }
+    const title = String(item.getField("title") || "").trim();
+    if (title) {
+      return title;
+    }
+    const displayTitle = (item as Zotero.Item).getDisplayTitle?.();
+    return displayTitle ? String(displayTitle).trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface HistorySearchCache {
   normalizedQuery: string;
   queryKey: string;
@@ -293,17 +331,41 @@ export function createSessionItem(
     args: { time: formatTimestamp(session.createdAt) },
   });
 
+  const titleRow = createElement(doc, "div", {
+    display: "flex",
+    alignItems: "center",
+    marginBottom: "4px",
+  });
+
   // Session title
   const titleEl = createElement(doc, "div", {
+    flex: "1",
+    minWidth: "0",
     fontWeight: "600",
     fontSize: "13px",
-    marginBottom: "4px",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
     color: theme.textPrimary,
   });
   titleEl.textContent = session.title || fallbackTitle;
+  titleRow.appendChild(titleEl);
+
+  const literatureLabel = resolveSessionLiteratureLabel(session);
+  let literatureEl: HTMLElement | null = null;
+  if (literatureLabel) {
+    literatureEl = createElement(doc, "div", {
+      marginBottom: "4px",
+      fontSize: "11px",
+      fontWeight: "500",
+      color: theme.textSecondary,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+    });
+    literatureEl.title = literatureLabel;
+    literatureEl.textContent = literatureLabel;
+  }
 
   editBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -374,7 +436,8 @@ export function createSessionItem(
     marginBottom: "4px",
   });
   previewEl.textContent =
-    session.lastMessagePreview || getString("chat-no-messages");
+    sanitizeMessagePreview(session.lastMessagePreview) ||
+    getString("chat-no-messages");
 
   // Meta info (message count and last update)
   const metaEl = createElement(doc, "div", {
@@ -395,7 +458,10 @@ export function createSessionItem(
   metaEl.appendChild(msgCount);
   metaEl.appendChild(timeEl);
 
-  contentWrapper.appendChild(titleEl);
+  contentWrapper.appendChild(titleRow);
+  if (literatureEl) {
+    contentWrapper.appendChild(literatureEl);
+  }
   contentWrapper.appendChild(previewEl);
   contentWrapper.appendChild(metaEl);
 
@@ -1497,14 +1563,58 @@ export function populateHistoryDropdown(
 /**
  * Toggle history dropdown visibility
  */
-export function toggleHistoryDropdown(dropdown: HTMLElement): boolean {
+export function toggleHistoryDropdown(
+  dropdown: HTMLElement,
+  anchorBtn?: HTMLElement | null,
+): boolean {
   const isVisible = dropdown.style.display !== "none";
   if (isVisible) {
     dropdown.style.display = "none";
     return false;
   }
+  if (anchorBtn) {
+    positionHistoryDropdown(dropdown, anchorBtn);
+  }
   dropdown.style.display = "flex";
   return true;
+}
+
+function positionHistoryDropdown(
+  dropdown: HTMLElement,
+  anchorBtn: HTMLElement,
+): void {
+  const root = dropdown.parentElement;
+  const rootRect = root?.getBoundingClientRect();
+  const anchorRect = anchorBtn.getBoundingClientRect();
+  if (!rootRect) {
+    return;
+  }
+
+  const margin = 8;
+  const preferredWidth = 300;
+  const width = Math.min(preferredWidth, Math.max(0, rootRect.width - margin * 2));
+  const anchorLeft = anchorRect.left - rootRect.left;
+  const anchorRight = anchorRect.right - rootRect.left;
+  let left = anchorLeft;
+
+  // Prefer opening to the right of narrow panels; clamp inside the root bounds.
+  if (left + width > rootRect.width - margin) {
+    left = Math.max(margin, rootRect.width - width - margin);
+  }
+  if (left < margin) {
+    left = margin;
+  }
+  // If the anchor sits on the left toolbar, keep the menu aligned under it when possible.
+  if (anchorRight <= rootRect.width / 2) {
+    left = Math.max(margin, Math.min(anchorLeft, rootRect.width - width - margin));
+  }
+
+  dropdown.style.width = `${width}px`;
+  dropdown.style.maxWidth = `calc(100% - ${margin * 2}px)`;
+  dropdown.style.bottom = "auto";
+  dropdown.style.right = "auto";
+  dropdown.style.left = `${left}px`;
+  dropdown.style.top = `${Math.max(0, anchorRect.bottom - rootRect.top + 6)}px`;
 }
 
 /**

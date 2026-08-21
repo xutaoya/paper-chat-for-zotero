@@ -5,6 +5,7 @@
 import { config } from "../../../../package.json";
 import type { ChatPanelContext, AttachmentState, SessionInfo } from "./types";
 import { createElement, copyToClipboard } from "./ChatPanelBuilder";
+import { renderQuickActionsBar } from "./QuickActionsController";
 import { getCurrentTheme } from "./ChatPanelTheme";
 import {
   createHistoryDropdownState,
@@ -38,6 +39,7 @@ import {
   type ReasoningEffortPreference,
 } from "../../providers/reasoning-request";
 import { getChatManager, type PanelMode } from "./ChatPanelManager";
+import { startReaderFigureScreenshot } from "../ReaderFigureScreenshot";
 import {
   MentionSelector,
   type MentionResource,
@@ -178,7 +180,20 @@ export function updateConversationNoteSummaryButton(
 interface AttachmentPreviewActions {
   onRemoveImage?: (index: number) => void;
   onRemoveQuote?: (index: number) => void;
+  onRemoveSelectedText?: () => void;
   onNavigateQuote?: (quote: QuotedMessageRef) => void | Promise<void>;
+}
+
+const PENDING_SELECTED_TEXT_PREVIEW_CHARACTERS = 80;
+
+function createPendingSelectedTextPreview(text: string): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= PENDING_SELECTED_TEXT_PREVIEW_CHARACTERS) {
+    return normalized;
+  }
+  return `${normalized
+    .slice(0, Math.max(0, PENDING_SELECTED_TEXT_PREVIEW_CHARACTERS - 3))
+    .trimEnd()}...`;
 }
 
 function clearPendingQuotedMessages(context: ChatPanelContext): void {
@@ -679,14 +694,17 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
   const uploadFileBtn = container.querySelector(
     "#chat-upload-file",
   ) as HTMLButtonElement;
-  const presentationBtn = container.querySelector(
-    "#chat-generate-presentation",
+  const figureScreenshotBtn = container.querySelector(
+    "#chat-figure-screenshot-btn",
   ) as HTMLButtonElement | null;
   const historyBtn = container.querySelector(
     "#chat-history-btn",
   ) as HTMLButtonElement;
   const summarizeConversationBtn = container.querySelector(
     "#chat-summarize-conversation-note",
+  ) as HTMLButtonElement | null;
+  const clearConversationBtn = container.querySelector(
+    "#chat-clear-conversation",
   ) as HTMLButtonElement | null;
   const debugContextBtn = container.querySelector(
     "#chat-debug-context-btn",
@@ -722,6 +740,22 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
       submitPending = false;
     }
   };
+  const runQuickActionPrompt = async (prompt: string): Promise<void> => {
+    if (submitPending) return;
+    submitPending = true;
+    try {
+      await sendMessage(
+        context,
+        messageInput,
+        sendButton,
+        attachmentsPreview,
+        prompt,
+      );
+    } finally {
+      submitPending = false;
+    }
+  };
+  void renderQuickActionsBar(context, getCurrentTheme(), runQuickActionPrompt);
   const turnQueue = container.querySelector(
     "#chat-turn-queue",
   ) as HTMLElement | null;
@@ -1202,12 +1236,22 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
     ztoolkit.log("New session created:", newSession.id);
   });
 
-  if (presentationBtn) {
-    presentationBtn.addEventListener(
-      "click",
-      createPresentationButtonLaunchHandler(context, presentationBtn),
+  clearConversationBtn?.addEventListener("click", async () => {
+    const session = chatManager.getActiveSession();
+    if (!session?.messages.length) return;
+    const confirmed = container.ownerDocument.defaultView?.confirm(
+      getString("chat-clear-conversation-confirm"),
     );
-  }
+    if (!confirmed) return;
+    sessionTurnQueue.clear(session.id);
+    invalidateHistoryNavigation();
+    await chatManager.clearCurrentSession();
+    context.clearAttachments();
+    context.updateAttachmentsPreview();
+    context.renderMessages([]);
+    context.renderExecutionPlan(undefined);
+    syncSendButtonState(sendButton, chatManager);
+  });
 
   summarizeConversationBtn?.addEventListener("click", async () => {
     if (summarizeConversationBtn.disabled) {
@@ -1337,12 +1381,18 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
     }
   });
 
+  figureScreenshotBtn?.addEventListener("click", () => {
+    if (!startReaderFigureScreenshot()) {
+      context.appendError(getString("chat-reader-figure-screenshot-no-pdf"));
+    }
+  });
+
   // History button - toggle dropdown with pagination
   historyBtn?.addEventListener("click", async () => {
     ztoolkit.log("History button clicked");
     if (!historyDropdown) return;
 
-    const isNowVisible = toggleHistoryDropdown(historyDropdown);
+    const isNowVisible = toggleHistoryDropdown(historyDropdown, historyBtn);
     if (!isNowVisible) return;
 
     if (!historyBackfillStarted) {
@@ -1454,9 +1504,10 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
     modelSelectorBtn.addEventListener("click", () => {
       const isVisible = modelDropdown.style.display === "block";
       if (isVisible) {
-        modelDropdown.style.display = "none";
+        closeModelDropdown(modelDropdown);
       } else {
         populateModelDropdown(container, modelDropdown, context);
+        positionModelDropdown(modelDropdown, modelSelectorBtn);
         modelDropdown.style.display = "block";
       }
     });
@@ -1469,7 +1520,7 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
         !modelSelectorBtn.contains(target) &&
         !modelDropdown.contains(target)
       ) {
-        modelDropdown.style.display = "none";
+        closeModelDropdown(modelDropdown);
       }
     };
     ownerDoc?.addEventListener("click", closeModelDropdownOnOutsideClick);
@@ -1599,14 +1650,6 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
         togglePanelModeFn();
       }
     });
-
-    // Hover effect
-    panelModeBtn.addEventListener("mouseenter", () => {
-      panelModeBtn.style.background = getCurrentTheme().dropdownItemHoverBg;
-    });
-    panelModeBtn.addEventListener("mouseleave", () => {
-      panelModeBtn.style.background = "transparent";
-    });
   }
 
   // @ Mention selector
@@ -1626,6 +1669,106 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
   };
 }
 
+const PENDING_IMAGE_HOVER_PREVIEW_ATTR = "data-paperchat-image-hover-preview";
+
+function clearPendingImageHoverPreviews(doc: Document): void {
+  if (typeof doc.querySelectorAll !== "function") {
+    return;
+  }
+  doc
+    .querySelectorAll(`[${PENDING_IMAGE_HOVER_PREVIEW_ATTR}]`)
+    .forEach((node) => {
+      node.remove();
+    });
+}
+
+/**
+ * Show an enlarged preview when hovering a pending image attachment chip.
+ */
+function attachPendingImageHoverPreview(
+  anchor: HTMLElement,
+  imageSrc: string,
+  doc: Document,
+): { cleanup: () => void } {
+  let preview: HTMLElement | null = null;
+  let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const removePreview = () => {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    preview?.remove();
+    preview = null;
+  };
+
+  const positionPreview = () => {
+    if (!preview) return;
+    const rect = anchor.getBoundingClientRect();
+    const previewRect = preview.getBoundingClientRect();
+    const viewportWidth = doc.defaultView?.innerWidth ?? previewRect.width;
+    const viewportHeight = doc.defaultView?.innerHeight ?? previewRect.height;
+    const left = Math.max(
+      8,
+      Math.min(rect.left, viewportWidth - previewRect.width - 8),
+    );
+    let top = rect.top - previewRect.height - 8;
+    if (top < 8) {
+      top = Math.min(rect.bottom + 8, viewportHeight - previewRect.height - 8);
+    }
+    preview.style.left = `${left}px`;
+    preview.style.top = `${top}px`;
+  };
+
+  const showPreview = () => {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    removePreview();
+    const theme = getCurrentTheme();
+    const viewportWidth = doc.defaultView?.innerWidth ?? 800;
+    const viewportHeight = doc.defaultView?.innerHeight ?? 600;
+    preview = createElement(doc, "div", {
+      position: "fixed",
+      zIndex: "2147483647",
+      padding: "6px",
+      borderRadius: "8px",
+      background: theme.containerBg,
+      border: `1px solid ${theme.borderColor}`,
+      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.18)",
+      pointerEvents: "none",
+    });
+    preview.setAttribute(PENDING_IMAGE_HOVER_PREVIEW_ATTR, "true");
+    const image = createElement(
+      doc,
+      "img",
+      {
+        display: "block",
+        maxWidth: `${Math.min(480, Math.round(viewportWidth * 0.8))}px`,
+        maxHeight: `${Math.min(360, Math.round(viewportHeight * 0.6))}px`,
+        width: "auto",
+        height: "auto",
+        objectFit: "contain",
+        borderRadius: "4px",
+      },
+      { src: imageSrc, alt: "" },
+    );
+    preview.appendChild(image);
+    doc.documentElement.appendChild(preview);
+    positionPreview();
+    image.addEventListener("load", positionPreview);
+  };
+
+  anchor.style.cursor = "zoom-in";
+  anchor.addEventListener("mouseenter", showPreview);
+  anchor.addEventListener("mouseleave", () => {
+    hideTimer = setTimeout(removePreview, 80);
+  });
+
+  return { cleanup: removePreview };
+}
+
 /**
  * Update attachments preview display
  */
@@ -1639,8 +1782,9 @@ export function updateAttachmentsPreviewDisplay(
   ) as HTMLElement;
   if (!attachmentsPreview) return;
 
-  attachmentsPreview.textContent = "";
   const doc = container.ownerDocument!;
+  clearPendingImageHoverPreviews(doc);
+  attachmentsPreview.textContent = "";
   const theme = getCurrentTheme();
 
   const createTag = (): HTMLElement =>
@@ -1747,8 +1891,21 @@ export function updateAttachmentsPreviewDisplay(
   });
 
   if (attachmentState.pendingSelectedText) {
+    const selectedText = attachmentState.pendingSelectedText;
+    const preview = createPendingSelectedTextPreview(selectedText);
     const tag = createTag();
-    tag.appendChild(createLabel("Selection"));
+    tag.setAttribute("class", "pending-selected-text");
+    tag.setAttribute("title", selectedText);
+    tag.appendChild(
+      createLabel(`${getString("chat-reader-selected-text")}: ${preview}`),
+    );
+    if (actions.onRemoveSelectedText) {
+      tag.appendChild(
+        createRemoveButton(getString("chat-remove-reader-selected-text"), () =>
+          actions.onRemoveSelectedText?.(),
+        ),
+      );
+    }
     attachmentsPreview.appendChild(tag);
   }
 
@@ -1760,6 +1917,7 @@ export function updateAttachmentsPreviewDisplay(
   attachmentState.pendingImages.forEach((image, index) => {
     const tag = createTag();
     tag.setAttribute("class", "pending-image-attachment");
+    const imageSrc = getImageSrc(image);
     tag.appendChild(
       createElement(
         doc,
@@ -1773,18 +1931,20 @@ export function updateAttachmentsPreviewDisplay(
           background: theme.buttonBg,
         },
         {
-          src: getImageSrc(image),
+          src: imageSrc,
           alt: image.name || "Attached image",
           title: image.name || "Attached image",
         },
       ),
     );
     tag.appendChild(createLabel(image.name || "image"));
+    const hoverPreview = attachPendingImageHoverPreview(tag, imageSrc, doc);
     if (actions.onRemoveImage) {
       tag.appendChild(
-        createRemoveButton(`Remove ${image.name || "image"}`, () =>
-          actions.onRemoveImage?.(index),
-        ),
+        createRemoveButton(`Remove ${image.name || "image"}`, () => {
+          hoverPreview.cleanup();
+          actions.onRemoveImage?.(index);
+        }),
       );
     }
     attachmentsPreview.appendChild(tag);
@@ -1977,6 +2137,7 @@ async function sendMessage(
   messageInput: HTMLTextAreaElement | null,
   sendButton: HTMLButtonElement | null,
   _attachmentsPreview: HTMLElement | null,
+  presetContent?: string,
 ): Promise<void> {
   const { chatManager, authManager } = context;
   const chatHistory = context.container.querySelector(
@@ -1986,7 +2147,7 @@ async function sendMessage(
   if (!session) return;
 
   try {
-    const content = messageInput?.value?.trim();
+    const content = presetContent?.trim() || messageInput?.value?.trim();
     if (!content) return;
 
     // Get active reader item first (used for PDF attachment)
@@ -2477,6 +2638,47 @@ function populateReasoningDropdown(
 /**
  * Populate model dropdown with providers and their models
  */
+function closeModelDropdown(dropdown: HTMLElement): void {
+  dropdown.style.display = "none";
+}
+
+function positionModelDropdown(
+  dropdown: HTMLElement,
+  anchorBtn: HTMLElement,
+): void {
+  const root = dropdown.parentElement;
+  const rootRect = root?.getBoundingClientRect();
+  const anchorRect = anchorBtn.getBoundingClientRect();
+  if (!rootRect) {
+    return;
+  }
+
+  const margin = 8;
+  const gap = 6;
+  const preferredWidth = 240;
+  const width = Math.min(
+    preferredWidth,
+    Math.max(180, rootRect.width - margin * 2),
+  );
+  let left = anchorRect.left - rootRect.left;
+  if (left + width > rootRect.width - margin) {
+    left = Math.max(margin, rootRect.width - width - margin);
+  }
+  if (left < margin) {
+    left = margin;
+  }
+
+  const bottom = Math.max(gap, rootRect.bottom - anchorRect.top + gap);
+  const maxHeight = Math.max(120, anchorRect.top - rootRect.top - margin - gap);
+
+  dropdown.style.left = `${left}px`;
+  dropdown.style.right = "auto";
+  dropdown.style.top = "auto";
+  dropdown.style.bottom = `${bottom}px`;
+  dropdown.style.width = `${width}px`;
+  dropdown.style.maxHeight = `${Math.min(280, maxHeight)}px`;
+}
+
 function populateModelDropdown(
   container: HTMLElement,
   dropdown: HTMLElement,
@@ -2660,7 +2862,7 @@ function populateModelDropdown(
         if (shouldWarnForPaperChatTierSwitch(currentTier, tier)) {
           const confirmed = await confirmHighConsumptionTierSwitch(doc, tier);
           if (!confirmed) {
-            dropdown.style.display = "none";
+            closeModelDropdown(dropdown);
             return;
           }
         }
@@ -2694,7 +2896,7 @@ function populateModelDropdown(
           });
 
           updateModelSelectorDisplay(container);
-          dropdown.style.display = "none";
+          closeModelDropdown(dropdown);
           context.updateUserBar();
         } catch (error) {
           setPref("paperchatTierState", JSON.stringify(previousTierState));
@@ -2860,7 +3062,7 @@ function populateModelDropdown(
         });
         tierItem.addEventListener("click", async () => {
           if (isSelectedTier) {
-            dropdown.style.display = "none";
+            closeModelDropdown(dropdown);
             return;
           }
           await switchPaperChatSelection(tier, "tier");
@@ -2913,7 +3115,7 @@ function populateModelDropdown(
         });
         autoItem.addEventListener("click", async () => {
           if (isSelectedTier && !isManualSelection) {
-            dropdown.style.display = "none";
+            closeModelDropdown(dropdown);
             return;
           }
           await switchPaperChatSelection(tier, "auto");
@@ -2970,7 +3172,7 @@ function populateModelDropdown(
           });
           modelItem.addEventListener("click", async () => {
             if (isCurrentModel) {
-              dropdown.style.display = "none";
+              closeModelDropdown(dropdown);
               return;
             }
             await switchPaperChatSelection(tier, "manual", model);
@@ -3085,7 +3287,7 @@ function populateModelDropdown(
 
             // Update display and close dropdown
             updateModelSelectorDisplay(container);
-            dropdown.style.display = "none";
+            closeModelDropdown(dropdown);
 
             // Update user bar (provider might have changed)
             context.updateUserBar();

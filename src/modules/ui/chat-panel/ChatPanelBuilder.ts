@@ -26,6 +26,23 @@ export function createElement(
   return el;
 }
 
+export function createChatEmptyStateIcon(doc: Document): HTMLElement {
+  return createElement(
+    doc,
+    "img",
+    {
+      width: "48px",
+      height: "48px",
+      marginBottom: "16px",
+      opacity: "0.6",
+    },
+    {
+      src: `chrome://${config.addonRef}/content/icons/chat-start.svg`,
+      alt: "",
+    },
+  );
+}
+
 /**
  * Create the chat container element using DOM API
  */
@@ -60,6 +77,7 @@ export function createChatContainer(
       display: "flex",
       flexDirection: "column",
       height: "100%",
+      position: "relative",
     },
     { class: "chat-panel-root" },
   );
@@ -462,12 +480,7 @@ export function createChatContainer(
     { id: "chat-empty-state" },
   );
 
-  const emptyIcon = createElement(doc, "div", {
-    fontSize: "48px",
-    marginBottom: "16px",
-    opacity: "0.6",
-  });
-  emptyIcon.textContent = "\uD83D\uDCAC"; // 💬
+  const emptyIcon = createChatEmptyStateIcon(doc);
 
   const emptyText = createElement(doc, "div", {
     fontSize: "15px",
@@ -487,11 +500,12 @@ export function createChatContainer(
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
-      padding: "10px 14px",
+      padding: "8px 12px",
       background: theme.toolbarBg,
-      borderTop: `1px solid ${theme.borderColor}`,
-      flexWrap: "wrap",
-      gap: "10px",
+      borderBottom: `1px solid ${theme.borderColor}`,
+      flexWrap: "nowrap",
+      gap: "8px",
+      flexShrink: "0",
     },
     { id: "chat-toolbar" },
   );
@@ -518,13 +532,29 @@ export function createChatContainer(
   );
 
   const btnStyle: Partial<CSSStyleDeclaration> = {
-    background: theme.buttonBg,
-    border: `1px solid ${theme.inputBorderColor}`,
-    borderRadius: "4px",
-    padding: "5px 10px",
+    background: "transparent",
+    border: `1px solid transparent`,
+    borderRadius: "8px",
+    padding: "6px",
+    width: "32px",
+    height: "32px",
     cursor: "pointer",
-    fontSize: "15px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     color: theme.textPrimary,
+    transition: "background 0.15s ease, border-color 0.15s ease",
+  };
+
+  const applyToolbarButtonHover = (btn: HTMLElement) => {
+    btn.addEventListener("mouseenter", () => {
+      btn.style.background = theme.buttonHoverBg;
+      btn.style.borderColor = theme.borderColor;
+    });
+    btn.addEventListener("mouseleave", () => {
+      btn.style.background = "transparent";
+      btn.style.borderColor = "transparent";
+    });
   };
 
   const iconStyle: Partial<CSSStyleDeclaration> = {
@@ -552,23 +582,6 @@ export function createChatContainer(
   });
   uploadFileBtn.appendChild(uploadIcon);
 
-  // Presentation button. Capability checks happen on click so the entry stays
-  // discoverable even when another provider is currently selected.
-  const presentationBtn = createElement(doc, "button", btnStyle, {
-    id: "chat-generate-presentation",
-    title: getString("presentation-generate"),
-  });
-  presentationBtn.setAttribute("type", "button");
-  presentationBtn.setAttribute(
-    "aria-label",
-    getString("presentation-generate"),
-  );
-  const presentationIcon = createElement(doc, "img", iconStyle, {
-    src: `chrome://${config.addonRef}/content/icons/presentation.svg`,
-    alt: "",
-  });
-  presentationBtn.appendChild(presentationIcon);
-
   // History button
   const historyBtn = createElement(doc, "button", btnStyle, {
     id: "chat-history-btn",
@@ -579,15 +592,21 @@ export function createChatContainer(
   });
   historyBtn.appendChild(historyIcon);
 
-  const summarizeConversationBtn = createElement(
-    doc,
-    "button",
-    { ...btnStyle, display: "none" },
-    {
-      id: "chat-summarize-conversation-note",
-      title: getString("chat-summarize-conversation-note"),
-    },
-  );
+  const panelModeBtn = createElement(doc, "button", btnStyle, {
+    id: "chat-panel-mode-btn",
+    title: getString("chat-toggle-panel-mode"),
+  });
+  const panelModeIcon = createElement(doc, "img", iconStyle, {
+    id: "chat-panel-mode-icon",
+  });
+  (panelModeIcon as HTMLImageElement).src =
+    `chrome://${config.addonRef}/content/icons/split.svg`;
+  panelModeBtn.appendChild(panelModeIcon);
+
+  const summarizeConversationBtn = createElement(doc, "button", btnStyle, {
+    id: "chat-summarize-conversation-note",
+    title: getString("chat-summarize-conversation-note"),
+  });
   summarizeConversationBtn.setAttribute("type", "button");
   summarizeConversationBtn.setAttribute(
     "aria-label",
@@ -599,9 +618,31 @@ export function createChatContainer(
   });
   summarizeConversationBtn.appendChild(summarizeConversationIcon);
 
+  const clearConversationBtn = createElement(doc, "button", btnStyle, {
+    id: "chat-clear-conversation",
+    title: getString("chat-clear-conversation"),
+    "aria-label": getString("chat-clear-conversation"),
+  });
+  const clearConversationIcon = createElement(doc, "img", iconStyle, {
+    src: `chrome://${config.addonRef}/content/icons/trash.svg`,
+    alt: "",
+  });
+  clearConversationBtn.appendChild(clearConversationIcon);
+
+  toolbarButtons.appendChild(panelModeBtn);
   toolbarButtons.appendChild(newChatBtn);
   toolbarButtons.appendChild(uploadFileBtn);
   toolbarButtons.appendChild(historyBtn);
+  for (const btn of [
+    panelModeBtn,
+    newChatBtn,
+    uploadFileBtn,
+    historyBtn,
+    clearConversationBtn,
+    summarizeConversationBtn,
+  ]) {
+    applyToolbarButtonHover(btn);
+  }
   if (getPref("debugContextExportEnabled") === true) {
     // Internal debug-only export button. The pref defaults to false and is not exposed in settings.
     const debugContextBtn = createElement(doc, "button", btnStyle, {
@@ -618,10 +659,11 @@ export function createChatContainer(
       lineHeight: "16px",
     });
     toolbarButtons.appendChild(debugContextBtn);
+    applyToolbarButtonHover(debugContextBtn);
   }
 
+  toolbarRightActions.appendChild(clearConversationBtn);
   toolbarRightActions.appendChild(summarizeConversationBtn);
-  toolbarRightActions.appendChild(presentationBtn);
   toolbar.appendChild(toolbarButtons);
   toolbar.appendChild(toolbarRightActions);
 
@@ -640,13 +682,15 @@ export function createChatContainer(
     { id: "chat-attachments-preview" },
   );
 
-  // Input Area - ChatBox style with vertical layout
+  // Input Area - unified AI composer card
   const inputArea = createElement(doc, "div", {
     display: "flex",
     flexDirection: "column",
-    padding: "14px",
-    background: theme.inputAreaBg,
+    padding: "12px 14px 16px",
+    background: theme.containerBg,
     borderTop: `1px solid ${theme.borderColor}`,
+    overflow: "visible",
+    flexShrink: "0",
   });
 
   const turnQueue = createElement(
@@ -656,34 +700,58 @@ export function createChatContainer(
     { id: "chat-turn-queue" },
   );
 
-  // Input wrapper - contains textarea
+  const quickActionsBar = createElement(
+    doc,
+    "div",
+    {
+      display: "none",
+      flexWrap: "wrap",
+      alignItems: "center",
+      gap: "8px",
+      marginBottom: "10px",
+      padding: "0 2px",
+    },
+    { id: "chat-quick-actions-bar" },
+  );
+
   const inputWrapper = createElement(
     doc,
     "div",
     {
       display: "flex",
+      flexDirection: "column",
       border: `1px solid ${theme.inputBorderColor}`,
-      borderRadius: "12px",
+      borderRadius: "20px",
       background: theme.inputBg,
+      boxShadow: theme.composerShadow,
       overflow: "hidden",
+      flexShrink: "0",
+      transition: "border-color 0.15s ease, box-shadow 0.15s ease",
     },
     { id: "chat-input-wrapper" },
   );
+  inputWrapper.setAttribute(
+    "data-focus-border-color",
+    theme.inputFocusBorderColor,
+  );
+  inputWrapper.setAttribute("data-idle-border-color", theme.inputBorderColor);
+  inputWrapper.setAttribute("data-focus-ring-color", theme.inputFocusRingColor);
+  inputWrapper.setAttribute("data-idle-shadow", theme.composerShadow);
 
   const messageInput = createElement(
     doc,
     "textarea",
     {
       flex: "1",
-      height: "60px",
-      minHeight: "60px",
-      maxHeight: "140px",
-      padding: "12px 14px",
+      width: "100%",
+      minHeight: "44px",
+      maxHeight: "200px",
+      padding: "14px 16px",
       border: "none",
       boxSizing: "border-box",
       fontFamily: "inherit",
       fontSize: "14px",
-      lineHeight: "18px",
+      lineHeight: "1.5",
       resize: "none",
       outline: "none",
       overflowY: "hidden",
@@ -697,31 +765,101 @@ export function createChatContainer(
     },
   ) as HTMLTextAreaElement;
 
+  const applyComposerFocus = () => {
+    const focusBorder =
+      inputWrapper.getAttribute("data-focus-border-color") ||
+      theme.inputFocusBorderColor;
+    const focusRing =
+      inputWrapper.getAttribute("data-focus-ring-color") ||
+      theme.inputFocusRingColor;
+    inputWrapper.style.borderColor = focusBorder;
+    inputWrapper.style.boxShadow = `0 0 0 3px ${focusRing}`;
+  };
+  const clearComposerFocus = () => {
+    inputWrapper.style.borderColor =
+      inputWrapper.getAttribute("data-idle-border-color") ||
+      theme.inputBorderColor;
+    inputWrapper.style.boxShadow =
+      inputWrapper.getAttribute("data-idle-shadow") || theme.composerShadow;
+  };
+  messageInput.addEventListener("focus", applyComposerFocus);
+  messageInput.addEventListener("blur", clearComposerFocus);
+
   inputWrapper.appendChild(messageInput);
 
-  // Bottom bar - model selector + settings on left, send button on right
   const inputBottomBar = createElement(doc, "div", {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: "10px",
-    gap: "8px",
+    padding: "8px 2px 0",
+    gap: "12px",
+    overflow: "visible",
   });
 
-  // Left side container (model selector + settings button)
   const leftContainer = createElement(doc, "div", {
     display: "flex",
     alignItems: "center",
-    gap: "8px",
+    gap: "6px",
     flex: "1",
     minWidth: "0",
   });
+
+  const applyComposerIconHover = (btn: HTMLElement) => {
+    btn.addEventListener("mouseenter", () => {
+      btn.style.background = theme.buttonHoverBg;
+    });
+    btn.addEventListener("mouseleave", () => {
+      btn.style.background = "transparent";
+    });
+  };
+
+  const createComposerIconButton = (
+    id: string,
+    title: string,
+    iconSrc: string,
+  ): HTMLElement => {
+    const button = createElement(
+      doc,
+      "button",
+      {
+        width: "32px",
+        height: "32px",
+        minWidth: "32px",
+        minHeight: "32px",
+        flex: "0 0 32px",
+        boxSizing: "border-box",
+        background: "transparent",
+        border: "none",
+        borderRadius: "50%",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "0",
+        lineHeight: "0",
+        transition: "background 0.15s ease",
+      },
+      { id, title, "aria-label": title },
+    );
+    const icon = createElement(doc, "img", {
+      width: "16px",
+      height: "16px",
+      display: "block",
+      opacity: "0.65",
+      pointerEvents: "none",
+    }) as HTMLImageElement;
+    icon.src = iconSrc;
+    icon.alt = "";
+    button.appendChild(icon);
+    applyComposerIconHover(button);
+    return button;
+  };
 
   const modelSelectorLabel = createElement(
     doc,
     "div",
     {
-      display: "flex",
+      display: "none",
       alignItems: "center",
       gap: "4px",
       flexShrink: "0",
@@ -751,8 +889,9 @@ export function createChatContainer(
       fontSize: "10px",
       lineHeight: "14px",
       cursor: "help",
-      opacity: "0.75",
+      opacity: "0.65",
       userSelect: "none",
+      flexShrink: "0",
     },
     {
       id: "chat-model-selector-help",
@@ -812,14 +951,13 @@ export function createChatContainer(
   modelSelectorHelp.addEventListener("mouseenter", showModelHelp);
   modelSelectorHelp.addEventListener("mouseleave", hideModelHelp);
 
-  modelSelectorLabel.appendChild(modelSelectorHelp);
-
   // Model selector container
   const modelSelectorContainer = createElement(doc, "div", {
     position: "relative",
     flex: "0 1 auto",
     minWidth: "0",
     maxWidth: "100%",
+    overflow: "visible",
   });
 
   // Model selector button
@@ -829,11 +967,11 @@ export function createChatContainer(
     {
       display: "flex",
       alignItems: "center",
-      gap: "6px",
-      padding: "6px 12px",
+      gap: "4px",
+      padding: "5px 10px",
       background: theme.buttonBg,
-      border: `1px solid ${theme.inputBorderColor}`,
-      borderRadius: "8px",
+      border: "none",
+      borderRadius: "999px",
       cursor: "pointer",
       fontSize: "12px",
       color: theme.textSecondary,
@@ -841,9 +979,20 @@ export function createChatContainer(
       maxWidth: "100%",
       minWidth: "0",
       overflow: "hidden",
+      transition: "background 0.15s ease",
     },
-    { id: "chat-model-selector-btn" },
+    {
+      id: "chat-model-selector-btn",
+      title: getString("chat-switch-model-label"),
+      "aria-label": getString("chat-switch-model-label"),
+    },
   );
+  modelSelectorBtn.addEventListener("mouseenter", () => {
+    modelSelectorBtn.style.background = theme.buttonHoverBg;
+  });
+  modelSelectorBtn.addEventListener("mouseleave", () => {
+    modelSelectorBtn.style.background = theme.buttonBg;
+  });
 
   const modelSelectorText = createElement(
     doc,
@@ -861,128 +1010,96 @@ export function createChatContainer(
   modelSelectorText.textContent = getString("chat-select-model");
 
   const modelSelectorArrow = createElement(doc, "span", {
-    fontSize: "10px",
-    opacity: "0.6",
+    fontSize: "9px",
+    opacity: "0.55",
+    flexShrink: "0",
   });
   modelSelectorArrow.textContent = "▼";
 
   modelSelectorBtn.appendChild(modelSelectorText);
   modelSelectorBtn.appendChild(modelSelectorArrow);
 
-  // Model dropdown
+  // Model dropdown is portaled to the panel root so it can overlay the
+  // textarea above the toolbar instead of spilling off the panel bottom.
   const modelDropdown = createElement(
     doc,
     "div",
     {
       display: "none",
       position: "absolute",
-      bottom: "100%",
       left: "0",
-      marginBottom: "4px",
+      bottom: "0",
       minWidth: "220px",
       maxWidth: "300px",
-      maxHeight: "300px",
+      maxHeight: "280px",
       overflowY: "auto",
       background: theme.dropdownBg,
       border: `1px solid ${theme.borderColor}`,
-      borderRadius: "8px",
-      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+      borderRadius: "12px",
+      boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
       zIndex: "10002",
     },
     { id: "chat-model-dropdown" },
   );
 
   modelSelectorContainer.appendChild(modelSelectorBtn);
-  modelSelectorContainer.appendChild(modelDropdown);
 
-  // Settings button (gear icon)
-  const settingsBtn = createElement(
-    doc,
-    "button",
-    {
-      width: "28px",
-      height: "28px",
-      background: "transparent",
-      border: "none",
-      borderRadius: "6px",
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "0",
-    },
-    { id: "chat-settings-btn" },
-  );
-  settingsBtn.title = getString("chat-open-settings");
-
-  // Settings icon (SVG)
-  const settingsIcon = createElement(doc, "img", {
-    width: "16px",
-    height: "16px",
-    opacity: "0.6",
+  const iconActionsGroup = createElement(doc, "div", {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flexShrink: "0",
   });
-  (settingsIcon as HTMLImageElement).src =
-    `chrome://${config.addonRef}/content/icons/config.svg`;
-  settingsBtn.appendChild(settingsIcon);
 
-  // Panel mode toggle button (sidebar/floating)
-  const panelModeBtn = createElement(
-    doc,
-    "button",
-    {
-      width: "28px",
-      height: "28px",
-      background: "transparent",
-      border: "none",
-      borderRadius: "6px",
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "0",
-    },
-    { id: "chat-panel-mode-btn" },
-  );
-  panelModeBtn.title = getString("chat-toggle-panel-mode");
+  const rightContainer = createElement(doc, "div", {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    flexShrink: "0",
+  });
 
-  // Panel mode icon (SVG image)
-  const panelModeIcon = createElement(
-    doc,
-    "img",
-    {
-      width: "16px",
-      height: "16px",
-      opacity: "0.6",
-    },
-    { id: "chat-panel-mode-icon" },
+  const settingsBtn = createComposerIconButton(
+    "chat-settings-btn",
+    getString("chat-open-settings"),
+    `chrome://${config.addonRef}/content/icons/config.svg`,
   );
-  // Default: sidebar mode, show split icon (click to switch to floating)
-  (panelModeIcon as HTMLImageElement).src =
-    `chrome://${config.addonRef}/content/icons/split.svg`;
-  panelModeBtn.appendChild(panelModeIcon);
+
+  const figureScreenshotBtn = createComposerIconButton(
+    "chat-figure-screenshot-btn",
+    getString("chat-reader-figure-screenshot"),
+    `chrome://${config.addonRef}/content/icons/figure-screenshot.svg`,
+  );
 
   leftContainer.appendChild(modelSelectorLabel);
   leftContainer.appendChild(modelSelectorContainer);
-  leftContainer.appendChild(settingsBtn);
-  leftContainer.appendChild(panelModeBtn);
+  leftContainer.appendChild(modelSelectorHelp);
 
-  // Send button
   const sendButton = createElement(
     doc,
     "button",
     {
       width: "32px",
       height: "32px",
-      background: theme.userBubbleBg,
-      color: theme.userBubbleText,
+      minWidth: "32px",
+      minHeight: "32px",
+      maxWidth: "32px",
+      maxHeight: "32px",
+      flex: "0 0 32px",
+      aspectRatio: "1 / 1",
+      boxSizing: "border-box",
+      background: theme.sendButtonBg,
+      color: theme.sendButtonText,
       border: "none",
       borderRadius: "50%",
       cursor: "pointer",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      flexShrink: "0",
       padding: "0",
+      overflow: "hidden",
+      lineHeight: "0",
+      appearance: "none",
+      transition: "opacity 0.15s ease, transform 0.1s ease",
     },
     { id: "chat-send-button", title: getString("chat-send") },
   );
@@ -999,11 +1116,18 @@ export function createChatContainer(
     { id: "chat-send-icon", alt: "" },
   ) as HTMLImageElement;
   sendIcon.src = `chrome://${config.addonRef}/content/icons/send.svg`;
+  sendIcon.style.filter = "brightness(0) invert(1)";
   sendButton.appendChild(sendIcon);
 
-  inputBottomBar.appendChild(leftContainer);
-  inputBottomBar.appendChild(sendButton);
+  iconActionsGroup.appendChild(figureScreenshotBtn);
+  iconActionsGroup.appendChild(settingsBtn);
+  rightContainer.appendChild(iconActionsGroup);
+  rightContainer.appendChild(sendButton);
 
+  inputBottomBar.appendChild(leftContainer);
+  inputBottomBar.appendChild(rightContainer);
+
+  inputArea.appendChild(quickActionsBar);
   inputArea.appendChild(turnQueue);
   inputArea.appendChild(inputWrapper);
   inputArea.appendChild(inputBottomBar);
@@ -1015,9 +1139,11 @@ export function createChatContainer(
     {
       display: "none",
       position: "absolute",
-      bottom: "120px",
-      right: "10px",
+      top: "0",
+      left: "8px",
+      right: "auto",
       width: "300px",
+      maxWidth: "calc(100% - 16px)",
       maxHeight: "350px",
       overflow: "hidden",
       flexDirection: "column",
@@ -1165,15 +1291,16 @@ export function createChatContainer(
   root.appendChild(dragBar);
   root.appendChild(userBar);
   root.appendChild(readingLoopStrip);
+  root.appendChild(toolbar);
   chatViewport.appendChild(chatHistory);
   chatViewport.appendChild(executionPlanPanel);
   chatViewport.appendChild(executionApprovalPanel);
   chatViewport.appendChild(scrollBottomBtn);
   root.appendChild(chatViewport);
   root.appendChild(attachmentsPreview);
-  root.appendChild(toolbar);
   root.appendChild(inputArea);
   root.appendChild(historyDropdown);
+  root.appendChild(modelDropdown);
   root.appendChild(mentionPopup);
   container.appendChild(root);
 

@@ -2,6 +2,8 @@
  * PdfExtractor - PDF内容提取工具
  */
 
+import { parsePdfAttachmentText } from "./MinerUParser";
+
 const MAX_COMPRESSED_IMAGE_BYTES = 200 * 1024;
 const INITIAL_COMPRESSED_IMAGE_MAX_DIMENSION = 1600;
 const MIN_COMPRESSED_IMAGE_DIMENSION = 32;
@@ -53,6 +55,15 @@ export class PdfExtractor {
       if (text) {
         ztoolkit.log("PDF text extracted, length:", text.length);
         return text;
+      }
+
+      const mineruText = await parsePdfAttachmentText(pdfAttachment);
+      if (mineruText) {
+        ztoolkit.log(
+          "PDF text extracted via MinerU fallback, length:",
+          mineruText.length,
+        );
+        return mineruText;
       }
       return null;
     } catch (error) {

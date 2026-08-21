@@ -26,19 +26,9 @@ import {
   createNoteSummaryContext,
   type NoteSummarySourceItem,
 } from "../../chat/note-summary-destination";
+import { executeAppendToNote } from "../../chat/pdf-tools";
 import { normalizeSourceItemKeys } from "../../chat/note-source-provenance";
 import { isPathInsidePresentationRoot } from "../../presentation";
-import {
-  getSingleSelectedPresentationPaper,
-  launchPresentationForItem,
-  resolvePresentationPaperFromCandidates,
-} from "../../presentation/PresentationEntry";
-import {
-  isPresentationSessionCompatibleWithPaper,
-  presentationLaunchRequiresActiveSession,
-  selectPresentationSession,
-} from "../../presentation/PresentationSessionPolicy";
-import { createPresentationLaunchAuthorization } from "../../presentation/PresentationLaunchAuthorization";
 import type { PresentationLaunchSettings } from "../../presentation/PresentationLaunchSettings";
 
 import { HTML_NS, type AttachmentState, type ChatPanelContext } from "./types";
@@ -74,8 +64,8 @@ import {
   stripIncompleteTrailingToolCall,
 } from "./MarkdownRenderer";
 import { getDataPath } from "../../../utils/common";
+import { markdownToNoteHtml } from "../../../utils/markdownToNoteHtml";
 import {
-  buildReplyNoteSummaryPrompt,
   canSummarizeAssistantReply,
   collectNoteSummarySourceItemKeys,
   hasConversationMessages,
@@ -617,33 +607,6 @@ function getQuoteNavigationItem(
   );
 }
 
-/** Resolve the paper that owns a specific assistant presentation task. */
-function getPresentationItemForMessage(
-  message: ChatMessage | null | undefined,
-  session: ChatSession | null | undefined,
-): Zotero.Item | null {
-  if (!message) return null;
-
-  for (const artifact of message.presentationArtifacts || []) {
-    const item = getItemByLibraryKey(
-      artifact.sourceItemKey,
-      artifact.sourceLibraryID ?? session?.lastActiveItemLibraryID,
-    );
-    const paper = resolvePresentationPaperFromCandidates(item);
-    if (paper) return paper;
-  }
-
-  // Older messages predate source metadata on presentation artifacts. The
-  // assistant message still records the trusted source key, so use it before
-  // falling back to whatever paper is currently selected in Zotero.
-  for (const itemKey of message.sourceItemKeys || []) {
-    const item = getItemByLibraryKey(itemKey, session?.lastActiveItemLibraryID);
-    const paper = resolvePresentationPaperFromCandidates(item);
-    if (paper) return paper;
-  }
-  return null;
-}
-
 interface ChatMessageRenderCallbacks {
   retryableErrorMessageId?: string;
   onRetry?: () => void | Promise<void>;
@@ -780,7 +743,33 @@ async function summarizeConversationToNote(
   );
 }
 
-async function summarizeReplyToNote(
+function resolveItemKeyForReplyNote(
+  session: ChatSession,
+  message: ChatMessage,
+  navigationItem: Zotero.Item | null,
+): string | null {
+  const candidateKeys = [
+    ...collectNoteSummarySourceItemKeys([message]),
+    session.lastActiveItemKey,
+    navigationItem?.key,
+  ].filter((key): key is string => Boolean(key));
+
+  for (const key of candidateKeys) {
+    const resolved = resolveNoteSummarySourceItem(
+      key,
+      (itemKey) =>
+        getItemByLibraryKey(itemKey, session.lastActiveItemLibraryID),
+      (id) => Zotero.Items.get(id),
+    );
+    if (resolved) {
+      return resolved.itemKey;
+    }
+  }
+
+  return null;
+}
+
+async function copyReplyToItemNote(
   context: ChatPanelContext,
   assistantMessageId: string,
 ): Promise<void> {
@@ -791,20 +780,28 @@ async function summarizeReplyToNote(
   if (!session || !message || !canSummarizeAssistantReply(message)) {
     throw new Error(getString("chat-note-summary-unavailable"));
   }
-  const replyContent = formatMarkdownForMessageCopy(message.content, {
-    evidenceRecords: message.evidence,
-  });
-  const prompt = buildReplyNoteSummaryPrompt(
-    getString("chat-summarize-reply-note-prompt"),
-    replyContent || message.content,
-  );
-  await sendNoteSummaryPrompt(
-    context,
+
+  const itemKey = resolveItemKeyForReplyNote(
     session,
-    getString("chat-summarize-reply-note"),
-    prompt,
-    collectNoteSummarySourceItemKeys([message]),
+    message,
+    getQuoteNavigationItem(session, context.getCurrentItem()),
   );
+  if (!itemKey) {
+    throw new Error(getString("chat-copy-reply-note-no-item"));
+  }
+
+  const content =
+    formatMarkdownForMessageCopy(message.content, {
+      evidenceRecords: message.evidence,
+    }) || message.content;
+
+  const result = await executeAppendToNote(
+    { content: markdownToNoteHtml(content), itemKey, format: "html" },
+    itemKey,
+  );
+  if (result.startsWith("Error:")) {
+    throw new Error(result.replace(/^Error:\s*/, ""));
+  }
 }
 
 function buildApprovalActionsForContainer(
@@ -1516,23 +1513,10 @@ async function initializeChatContentCommon(
   // Initialize ChatManager (handles migration and session loading)
   await manager.init();
 
-  // Get current item from reader
+  // Bind the panel to the active reader item and its conversation.
   const activeItem = requestedItem || getActiveReaderItem();
-  if (activeItem) {
-    moduleCurrentItem = activeItem;
-    manager.setCurrentItemKey(activeItem.key, activeItem.libraryID);
-    getReadingLoopService().setCurrentItem(activeItem);
-  } else {
-    moduleCurrentItem = null;
-    manager.setCurrentItemKey(null);
-    getReadingLoopService().setCurrentItem(null);
-  }
+  const session = await syncChatSessionForActiveItem(container, activeItem);
 
-  // Update PDF checkbox visibility
-  await context.updatePdfCheckboxVisibility(moduleCurrentItem);
-
-  // Load active session and render
-  const session = manager.getActiveSession();
   if (session) {
     context.renderMessages(session.messages);
     context.renderExecutionPlan(session.executionPlan);
@@ -1818,84 +1802,91 @@ function getReadingLoopAccent(state: ReadingLoopState): string {
 
 /**
  * Refresh chat for current item (works for both sidebar and floating)
- * Note: This updates the current item tracking but does NOT switch sessions
  */
-async function refreshChatForContainer(container: HTMLElement): Promise<void> {
-  const activeItem = pendingPanelItem || getActiveReaderItem();
-  pendingPanelItem = null;
+async function syncChatSessionForActiveItem(
+  container: HTMLElement,
+  item: Zotero.Item | null,
+): Promise<ChatSession | null> {
   const manager = getChatManager();
+  await manager.init();
 
-  // Update current item tracking (session remains the same)
-  if (activeItem) {
-    moduleCurrentItem = activeItem;
-    manager.setCurrentItemKey(activeItem.key, activeItem.libraryID);
-    getReadingLoopService().setCurrentItem(activeItem);
-  } else {
-    moduleCurrentItem = null;
-    manager.setCurrentItemKey(null);
-    getReadingLoopService().setCurrentItem(null);
+  if (item) {
+    moduleCurrentItem = item;
+    manager.setCurrentItemKey(item.key, item.libraryID);
+    getReadingLoopService().setCurrentItem(item);
+    await updatePdfCheckboxVisibilityForItem(container, item, manager);
+    return manager.activateSessionForItem(item);
   }
 
-  // Update PDF checkbox visibility
-  await updatePdfCheckboxVisibilityForItem(
-    container,
-    moduleCurrentItem,
-    manager,
-  );
+  moduleCurrentItem = null;
+  manager.setCurrentItemKey(null);
+  getReadingLoopService().setCurrentItem(null);
+  await updatePdfCheckboxVisibilityForItem(container, null, manager);
+  return manager.getActiveSession();
+}
 
-  // Render current session messages (session doesn't change on tab switch)
-  const session = manager.getActiveSession();
+function renderActiveSessionInContainer(
+  container: HTMLElement,
+  session: ChatSession | null,
+): void {
+  const manager = getChatManager();
   const chatHistory = container.querySelector("#chat-history") as HTMLElement;
   const emptyState = container.querySelector(
     "#chat-empty-state",
   ) as HTMLElement;
-  if (chatHistory && session) {
-    const refreshContext = createContext(container);
-    const supportsToolCalling = providerSupportsToolCalling(
-      getProviderManager().getActiveProvider(),
-    );
-    renderMessageElementsWithMarkdownActions(
-      chatHistory,
-      emptyState,
-      session.messages,
-      () => getQuoteNavigationItem(session, moduleCurrentItem),
-      {
-        onFork: (assistantMessageId) =>
-          continueInNewChatFromMessage(refreshContext, assistantMessageId),
-        onQuoteReply: (assistantMessageId) =>
-          addAssistantReplyQuote(refreshContext, assistantMessageId),
-        onNavigateToQuotedMessage: (quote) =>
-          navigateToQuotedMessage(refreshContext, quote),
-        onSummarizeReply: supportsToolCalling
-          ? (assistantMessageId) =>
-              summarizeReplyToNote(refreshContext, assistantMessageId)
-          : undefined,
-        onSummarizeReplyError: (error) => {
-          refreshContext.appendError(error.message);
-        },
-        onResumePresentation: (assistantMessageId) =>
-          refreshContext.launchPresentation(assistantMessageId),
-        onCancelPresentation: () =>
-          session ? manager.cancelSessionTurn(session.id) : false,
-        onCancelPresentationError: (error) => {
-          refreshContext.appendError(error.message);
-        },
-        onMarkdownError: refreshContext.appendError,
-      },
-    );
-    updateConversationNoteSummaryButton(
-      container,
-      session.messages,
-      session.id,
-      supportsToolCalling,
-    );
-    updateExecutionInsetsForContainer(
-      container,
-      manager,
-      session.executionPlan,
-    );
+  if (!chatHistory || !session) {
+    return;
   }
 
+  const refreshContext = createContext(container);
+  const supportsToolCalling = providerSupportsToolCalling(
+    getProviderManager().getActiveProvider(),
+  );
+  renderMessageElementsWithMarkdownActions(
+    chatHistory,
+    emptyState,
+    session.messages,
+    () => getQuoteNavigationItem(session, moduleCurrentItem),
+    {
+      onFork: (assistantMessageId) =>
+        continueInNewChatFromMessage(refreshContext, assistantMessageId),
+      onQuoteReply: (assistantMessageId) =>
+        addAssistantReplyQuote(refreshContext, assistantMessageId),
+      onNavigateToQuotedMessage: (quote) =>
+        navigateToQuotedMessage(refreshContext, quote),
+      onSummarizeReply: (assistantMessageId) =>
+        copyReplyToItemNote(refreshContext, assistantMessageId),
+      onSummarizeReplyError: (error) => {
+        refreshContext.appendError(error.message);
+      },
+      onResumePresentation: (assistantMessageId) =>
+        refreshContext.launchPresentation(assistantMessageId),
+      onCancelPresentation: () =>
+        session ? manager.cancelSessionTurn(session.id) : false,
+      onCancelPresentationError: (error) => {
+        refreshContext.appendError(error.message);
+      },
+      onMarkdownError: refreshContext.appendError,
+    },
+  );
+  updateConversationNoteSummaryButton(
+    container,
+    session.messages,
+    session.id,
+    supportsToolCalling,
+  );
+  updateExecutionInsetsForContainer(container, manager, session.executionPlan);
+}
+
+/**
+ * Refresh chat for current item (works for both sidebar and floating)
+ * Switches to the active reader item's conversation when available.
+ */
+async function refreshChatForContainer(container: HTMLElement): Promise<void> {
+  const activeItem = pendingPanelItem || getActiveReaderItem();
+  pendingPanelItem = null;
+  const session = await syncChatSessionForActiveItem(container, activeItem);
+  renderActiveSessionInContainer(container, session);
   focusInput(container);
 }
 
@@ -2373,6 +2364,16 @@ async function syncPanelSessionForItem(options: {
     return false;
   }
 
+  const session =
+    options.session ??
+    (await options.manager.activateSessionForItem(options.item));
+  if (
+    options.expectedSessionId &&
+    options.manager.getActiveSession()?.id !== options.expectedSessionId
+  ) {
+    return false;
+  }
+
   if (options.syncNavigationState) {
     syncSessionNavigationState(
       context,
@@ -2381,7 +2382,6 @@ async function syncPanelSessionForItem(options: {
     );
   }
 
-  const session = options.session ?? options.manager.getActiveSession();
   if (session) {
     context.renderMessages(session.messages, () =>
       options.afterRender?.(container),
@@ -2506,112 +2506,17 @@ export async function focusRunningPresentationTask(
  * is the only cross-module surface used by the library and panel PPT entries.
  */
 export async function openPresentationForItem(
-  item: Zotero.Item,
-  prompt: string,
-  source: Extract<
+  _item: Zotero.Item,
+  _prompt: string,
+  _source: Extract<
     ChatPanelOpenSource,
     "presentation_menu" | "presentation_button"
   >,
-  settings: PresentationLaunchSettings,
-  onTaskReady?: (focusTask: () => void) => void,
-  expectedActiveSession: ChatSession | null = null,
+  _settings: PresentationLaunchSettings,
+  _onTaskReady?: (focusTask: () => void) => void,
+  _expectedActiveSession: ChatSession | null = null,
 ): Promise<boolean> {
-  const manager = getChatManager();
-  await manager.init();
-  if (getProviderManager().getActiveProviderId() !== "paperchat") {
-    return false;
-  }
-  const selection = await selectPresentationSession(
-    manager,
-    source,
-    expectedActiveSession,
-    {
-      itemKey: item.key,
-      title: String(item.getField?.("title") || "PaperChat PPT"),
-      libraryID: item.libraryID,
-    },
-  );
-  if (!selection) {
-    return false;
-  }
-  const { session } = selection;
-  if (
-    source === "presentation_button" &&
-    !isPresentationSessionCompatibleWithPaper(
-      session,
-      { itemKey: item.key, libraryID: item.libraryID },
-      Zotero.Libraries.userLibraryID,
-    )
-  ) {
-    Services.prompt.alert(
-      Zotero.getMainWindow() as unknown as mozIDOMWindowProxy,
-      getString("presentation-chat-context-mismatch-title"),
-      getString("presentation-chat-context-mismatch-message"),
-    );
-    return false;
-  }
-
-  const targetSessionIsActive = () =>
-    manager.getActiveSession()?.id === session.id;
-  if (targetSessionIsActive()) {
-    moduleCurrentItem = item;
-    manager.setCurrentItemKey(item.key, item.libraryID);
-    getReadingLoopService().setCurrentItem(item);
-    pendingPanelItem = item;
-    showPanel(source);
-
-    if (isPanelShown()) {
-      runWhenPanelReady(async () => {
-        if (
-          await syncPanelSessionForItem({
-            manager,
-            item,
-            session,
-            expectedSessionId: session.id,
-            clearAttachments: true,
-          })
-        ) {
-          if (pendingPanelItem === item) pendingPanelItem = null;
-        }
-      });
-    } else if (pendingPanelItem === item) {
-      pendingPanelItem = null;
-    }
-  }
-
-  if (getProviderManager().getActiveProviderId() !== "paperchat") {
-    return false;
-  }
-
-  return manager.sendMessage(prompt, {
-    item,
-    attachPdf: true,
-    targetSession: session,
-    // A library-menu launch owns a fresh item session and may continue in the
-    // background when another paper is opened. The in-chat button still
-    // belongs to the conversation that was active when its settings opened.
-    requireTargetSessionActive: presentationLaunchRequiresActiveSession(source),
-    allowedToolNames: ["presentation"],
-    allowPaperChatRetry: true,
-    requiredProviderId: "paperchat",
-    presentationAuthorization: createPresentationLaunchAuthorization(
-      {
-        itemKey: item.key,
-        libraryID: item.libraryID,
-      },
-      settings,
-    ),
-    onAssistantMessageCreated: ({ sessionId, assistantMessageId }) => {
-      onTaskReady?.(() => {
-        void focusRunningPresentationTask(
-          item,
-          source,
-          sessionId,
-          assistantMessageId,
-        );
-      });
-    },
-  });
+  return false;
 }
 
 /**
@@ -3217,6 +3122,10 @@ function renderPendingAttachmentsPreview(container: HTMLElement): void {
         );
         syncPendingAttachmentsPreviews(container);
       },
+      onRemoveSelectedText: () => {
+        pendingSelectedText = null;
+        syncPendingAttachmentsPreviews(container);
+      },
       onNavigateQuote: (quote) =>
         navigateToQuotedMessage(createContext(container), quote),
     },
@@ -3329,50 +3238,8 @@ function createContext(container: HTMLElement): ChatPanelContext {
       }
     },
     summarizeConversationToNote: () => summarizeConversationToNote(context),
-    launchPresentation: async (assistantMessageId?: string) => {
-      const session = manager.getActiveSession();
-      const taskMessage = assistantMessageId
-        ? session?.messages.find(
-            (message) =>
-              message.id === assistantMessageId && message.role === "assistant",
-          )
-        : undefined;
-      const sessionItem = session?.lastActiveItemKey
-        ? getItemByLibraryKey(
-            session.lastActiveItemKey,
-            session.lastActiveItemLibraryID,
-          )
-        : null;
-      const item = assistantMessageId
-        ? getPresentationItemForMessage(taskMessage, session)
-        : resolvePresentationPaperFromCandidates(
-            sessionItem,
-            moduleCurrentItem,
-            getActiveReaderItem(),
-            getSingleSelectedPresentationPaper(),
-          );
-      if (!item) {
-        Services.prompt.alert(
-          Zotero.getMainWindow() as unknown as mozIDOMWindowProxy,
-          getString("presentation-source-unavailable-title"),
-          getString("presentation-source-unavailable-message"),
-        );
-        return false;
-      }
-      return launchPresentationForItem(
-        item,
-        "chat_button",
-        (launchItem, prompt, source, settings, onTaskReady) =>
-          openPresentationForItem(
-            launchItem,
-            prompt,
-            source,
-            settings,
-            onTaskReady,
-            session,
-          ),
-        container.ownerDocument.defaultView || undefined,
-      );
+    launchPresentation: async (_assistantMessageId?: string) => {
+      return false;
     },
     renderMessages: (
       messages: ChatMessage[],
@@ -3440,10 +3307,8 @@ function createContext(container: HTMLElement): ChatPanelContext {
                 addAssistantReplyQuote(context, assistantMessageId),
               onNavigateToQuotedMessage: (quote) =>
                 navigateToQuotedMessage(context, quote),
-              onSummarizeReply: supportsToolCalling
-                ? (assistantMessageId) =>
-                    summarizeReplyToNote(context, assistantMessageId)
-                : undefined,
+              onSummarizeReply: (assistantMessageId) =>
+                copyReplyToItemNote(context, assistantMessageId),
               onSummarizeReplyError: (error) => {
                 context.appendError(error.message);
               },
@@ -3631,5 +3496,10 @@ export async function unregisterAll(): Promise<void> {
  */
 export function addSelectedTextAttachment(text: string): void {
   pendingSelectedText = text;
+  syncPendingAttachmentsPreviews(chatContainer || undefined);
+}
+
+export function addImageAttachment(image: ImageAttachment): void {
+  pendingImages = [...pendingImages, image];
   syncPendingAttachmentsPreviews(chatContainer || undefined);
 }

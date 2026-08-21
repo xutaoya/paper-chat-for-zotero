@@ -148,6 +148,9 @@ export default defineConfig({
         },
         bundle: true,
         target: "firefox115",
+        inject: [
+          "src/modules/presentation/renderer/set-immediate-browser-shim.ts",
+        ],
         outfile: `.scaffold/build/addon/content/scripts/${pkg.config.addonRef}.js`,
       },
       {

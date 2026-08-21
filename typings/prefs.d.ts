@@ -28,6 +28,8 @@ declare namespace _ZoteroTypes {
       "reasoningEffort": string;
       "paperchatBaseUrlOverride": string;
       "uploadRawPdfOnFailure": boolean;
+      "useMineruOnExtractFailure": boolean;
+      "mineruApiToken": string;
       "panelMode": string;
       "debugContextExportEnabled": boolean;
       "readingLoopHistory": string;
@@ -40,6 +42,7 @@ declare namespace _ZoteroTypes {
       "toolPermissionDefaultModes": string;
       "webSearchProvider": string;
       "agentMaxPlanningIterations": number;
+      "quickActions": string;
     };
   }
 }

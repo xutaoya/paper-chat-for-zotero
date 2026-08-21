@@ -168,6 +168,10 @@ class FakeElement {
           .includes(selector.slice(1));
       }
       if (selector.startsWith("[")) {
+        const attrOnly = selector.match(/^\[([^=\]]+)\]$/);
+        if (attrOnly) {
+          return element.hasAttribute(attrOnly[1]);
+        }
         const attributes = [...selector.matchAll(/\[([^=\]]+)="([^"]*)"\]/g)];
         return attributes.every(
           (match) => element.getAttribute(match[1]) === match[2],
@@ -189,9 +193,11 @@ class FakeElement {
 
 class FakeDocument {
   readonly head: FakeElement;
+  readonly documentElement: FakeElement;
 
   constructor() {
     this.head = new FakeElement(this, "head");
+    this.documentElement = new FakeElement(this, "html");
   }
 
   createElementNS(_namespace: string, tagName: string): FakeElement {
@@ -212,8 +218,12 @@ class FakeDocument {
     return node;
   }
 
-  querySelector(_selector: string): FakeElement | null {
-    return null;
+  querySelector(selector: string): FakeElement | null {
+    return this.documentElement.querySelector(selector);
+  }
+
+  querySelectorAll(selector: string): FakeElement[] {
+    return this.documentElement.querySelectorAll(selector);
   }
 }
 
@@ -831,7 +841,7 @@ describe("chat message exact navigation", function () {
     );
   });
 
-  it("offers note summarization for completed assistant replies", async function () {
+  it("offers copy-to-item-note for completed assistant replies", async function () {
     const doc = new FakeDocument();
     const history = new FakeElement(doc, "div");
     history.scrollHeight = 100;
@@ -1059,11 +1069,57 @@ describe("chat message exact navigation", function () {
       imageTag.children[0].getAttribute("src"),
       "data:image/png;base64,YWJj",
     );
+    imageTag.listeners.get("mouseenter")?.[0]?.({});
+    assert.lengthOf(
+      doc.documentElement.querySelectorAll("[data-paperchat-image-hover-preview]"),
+      1,
+    );
     imageTag.children[2].listeners.get("click")?.[0]?.({
       preventDefault: () => undefined,
       stopPropagation: () => undefined,
     });
+    assert.lengthOf(
+      doc.documentElement.querySelectorAll("[data-paperchat-image-hover-preview]"),
+      0,
+    );
     assert.deepEqual(removedImages, [0]);
+  });
+
+  it("renders pending selected text with preview and remove button", function () {
+    const doc = new FakeDocument();
+    const preview = new FakeElement(doc, "div");
+    const container = new AttachmentPreviewContainer(doc, preview);
+    let removedSelectedText = false;
+    const selectedText =
+      "This is a long selected passage from the PDF that should be previewed.";
+
+    updateAttachmentsPreviewDisplay(
+      asElement(container),
+      {
+        pendingQuotedMessages: [],
+        pendingImages: [],
+        pendingFiles: [],
+        pendingSelectedText: selectedText,
+      },
+      {
+        onRemoveSelectedText: () => {
+          removedSelectedText = true;
+        },
+      },
+    );
+
+    assert.equal(preview.style.display, "flex");
+    assert.lengthOf(preview.children, 1);
+    const selectedTag = preview.children[0];
+    assert.equal(selectedTag.getAttribute("class"), "pending-selected-text");
+    assert.equal(selectedTag.getAttribute("title"), selectedText);
+    assert.lengthOf(selectedTag.children, 2);
+    assert.include(selectedTag.children[0].textContent, selectedText.slice(0, 20));
+    selectedTag.children[1].listeners.get("click")?.[0]?.({
+      preventDefault: () => undefined,
+      stopPropagation: () => undefined,
+    });
+    assert.isTrue(removedSelectedText);
   });
 
   it("summarizes only usable conversation messages", function () {

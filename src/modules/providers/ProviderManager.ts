@@ -79,7 +79,12 @@ export const BUILTIN_PROVIDERS: Record<BuiltinProviderId, ProviderMetadata> = {
 };
 
 const PREFS_KEY = `${config.prefsPrefix}.providersConfig`;
-const REMOVED_BUILTIN_PROVIDER_IDS = new Set(["mistral", "groq", "openrouter"]);
+const REMOVED_BUILTIN_PROVIDER_IDS = new Set([
+  "mistral",
+  "groq",
+  "openrouter",
+  "paperchat",
+]);
 
 /**
  * Default fallback configuration
@@ -114,7 +119,7 @@ function createRetryAbortError(cause: Error): Error {
 
 export class ProviderManager {
   private providers: Map<string, AIProvider> = new Map();
-  private activeProviderId: string = "paperchat";
+  private activeProviderId: string = "openai";
   private configs: ProviderConfig[] = [];
   private fallbackConfig: FallbackConfig = { ...DEFAULT_FALLBACK_CONFIG };
   private onProviderChangeCallback?: (providerId: string) => void;
@@ -186,29 +191,21 @@ export class ProviderManager {
           data.activeProviderId,
         );
 
-        // Check if config is valid (has paperchat provider)
-        const hasPaperchat = providers.some((p) => p.id === "paperchat");
-        if (!hasPaperchat) {
-          ztoolkit.log(
-            "[ProviderManager] No paperchat found, resetting to defaults",
-          );
-          // Invalid config, reset to defaults
-          this.configs = this.getDefaultConfigs();
-          this.activeProviderId = "paperchat";
-          this.saveToPrefs();
-          return;
-        }
-
-        this.activeProviderId = data.activeProviderId || "paperchat";
+        // Normalize stored configs and drop removed built-in providers.
+        this.activeProviderId = data.activeProviderId || this.getDefaultActiveProviderId();
         const { configs, changed } = this.normalizeLoadedConfigs(providers);
         this.configs = configs;
         let prefsChanged = changed;
+        if (REMOVED_BUILTIN_PROVIDER_IDS.has(this.activeProviderId)) {
+          this.activeProviderId = this.getDefaultActiveProviderId();
+          prefsChanged = true;
+        }
         if (
           !this.configs.some(
             (provider) => provider.id === this.activeProviderId,
           )
         ) {
-          this.activeProviderId = "paperchat";
+          this.activeProviderId = this.getDefaultActiveProviderId();
           prefsChanged = true;
         }
         // Load fallback config
@@ -246,10 +243,12 @@ export class ProviderManager {
       } else {
         ztoolkit.log("[ProviderManager] No stored config, using defaults");
         this.configs = this.getDefaultConfigs();
+        this.activeProviderId = this.getDefaultActiveProviderId();
       }
     } catch (e) {
       ztoolkit.log("[ProviderManager] Error loading prefs:", e);
       this.configs = this.getDefaultConfigs();
+      this.activeProviderId = this.getDefaultActiveProviderId();
     }
   }
 
@@ -274,20 +273,7 @@ export class ProviderManager {
    * Get default provider configurations
    */
   private getDefaultConfigs(): ProviderConfig[] {
-    const configs: ProviderConfig[] = [
-      {
-        id: "paperchat",
-        name: "PaperChat",
-        type: "paperchat",
-        enabled: true,
-        isBuiltin: true,
-        order: 0,
-        defaultModel: undefined,
-        availableModels: [],
-        temperature: 0.7,
-        systemPrompt: "",
-      } as PaperChatProviderConfig,
-    ];
+    const configs: ProviderConfig[] = [];
 
     // Add API key providers
     const apiKeyProviders: BuiltinProviderId[] = [
@@ -303,9 +289,9 @@ export class ProviderManager {
         id,
         name: meta.name,
         type: meta.type,
-        enabled: false,
+        enabled: id === "openai",
         isBuiltin: true,
-        order: index + 1,
+        order: index,
         apiKey: "",
         baseUrl: meta.defaultBaseUrl,
         defaultModel: "",
@@ -314,6 +300,22 @@ export class ProviderManager {
     });
 
     return configs;
+  }
+
+  private getDefaultActiveProviderId(): string {
+    const preferredOrder: BuiltinProviderId[] = [
+      "openai",
+      "claude",
+      "gemini",
+      "deepseek",
+    ];
+    for (const id of preferredOrder) {
+      const config = this.configs.find((entry) => entry.id === id);
+      if (config) {
+        return config.id;
+      }
+    }
+    return this.configs.find((entry) => entry.enabled)?.id || "openai";
   }
 
   private shouldClearUnfetchedBuiltinModels(config: ProviderConfig): boolean {
@@ -557,7 +559,7 @@ export class ProviderManager {
     if (index >= 0) {
       this.configs.splice(index, 1);
       if (this.activeProviderId === providerId) {
-        this.activeProviderId = "paperchat";
+        this.activeProviderId = this.getDefaultActiveProviderId();
       }
       this.saveToPrefs();
       this.initializeProviders();
