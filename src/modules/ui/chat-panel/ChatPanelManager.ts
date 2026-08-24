@@ -616,6 +616,8 @@ interface ChatMessageRenderCallbacks {
   onRerollError?: (error: Error) => void;
   onFork?: (assistantMessageId: string) => void | Promise<void>;
   onForkError?: (error: Error) => void;
+  onDeleteTurn?: (assistantMessageId: string) => void | Promise<void>;
+  onDeleteTurnError?: (error: Error) => void;
   onQuoteReply?: (assistantMessageId: string) => void;
   onNavigateToQuotedMessage?: (quote: QuotedMessageRef) => void | Promise<void>;
   onSummarizeReply?: (assistantMessageId: string) => void | Promise<void>;
@@ -677,6 +679,8 @@ function renderMessageElementsWithMarkdownActions(
       onRetryError: callbacks.onRetryError,
       onFork: callbacks.onFork,
       onForkError: callbacks.onForkError,
+      onDeleteTurn: callbacks.onDeleteTurn,
+      onDeleteTurnError: callbacks.onDeleteTurnError,
       onQuoteReply: callbacks.onQuoteReply,
       onNavigateToQuotedMessage: callbacks.onNavigateToQuotedMessage,
       onSummarizeReply: callbacks.onSummarizeReply,
@@ -1851,6 +1855,25 @@ function renderActiveSessionInContainer(
     {
       onFork: (assistantMessageId) =>
         continueInNewChatFromMessage(refreshContext, assistantMessageId),
+      onDeleteTurn: async (assistantMessageId) => {
+        const activeSession = manager.getActiveSession();
+        if (!activeSession) {
+          throw new Error(getString("chat-delete-turn-failed"));
+        }
+        const deleted = await manager.deleteConversationTurn(
+          activeSession.id,
+          assistantMessageId,
+        );
+        if (!deleted) {
+          throw new Error(getString("chat-delete-turn-failed"));
+        }
+        refreshContext.renderMessages(
+          manager.getActiveSession()?.messages || [],
+        );
+      },
+      onDeleteTurnError: (error) => {
+        refreshContext.appendError(error.message);
+      },
       onQuoteReply: (assistantMessageId) =>
         addAssistantReplyQuote(refreshContext, assistantMessageId),
       onNavigateToQuotedMessage: (quote) =>
@@ -3304,6 +3327,25 @@ function createContext(container: HTMLElement): ChatPanelContext {
               },
               onFork: (assistantMessageId) =>
                 continueInNewChatFromMessage(context, assistantMessageId),
+              onDeleteTurn: async (assistantMessageId) => {
+                const activeSession = manager.getActiveSession();
+                if (!activeSession) {
+                  throw new Error(getString("chat-delete-turn-failed"));
+                }
+                const deleted = await manager.deleteConversationTurn(
+                  activeSession.id,
+                  assistantMessageId,
+                );
+                if (!deleted) {
+                  throw new Error(getString("chat-delete-turn-failed"));
+                }
+                context.renderMessages(
+                  manager.getActiveSession()?.messages || [],
+                );
+              },
+              onDeleteTurnError: (error) => {
+                context.appendError(error.message);
+              },
               onQuoteReply: (assistantMessageId) =>
                 addAssistantReplyQuote(context, assistantMessageId),
               onNavigateToQuotedMessage: (quote) =>

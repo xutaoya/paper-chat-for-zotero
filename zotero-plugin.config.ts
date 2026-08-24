@@ -124,14 +124,14 @@ export default defineConfig({
   name: pkg.config.addonName,
   id: pkg.config.addonID,
   namespace: pkg.config.addonRef,
-  updateURL:
-    pkg.config.updateURL === ""
-      ? ""
-      : getUpdateURLTemplate(pkg.version),
+  updateURL: getUpdateURLTemplate(pkg.version),
   xpiDownloadLink: XPI_DOWNLOAD_LINK_TEMPLATE,
 
   build: {
     assets: ["addon/**/*.*"],
+    makeManifest: {
+      enable: true,
+    },
     define: {
       ...pkg.config,
       author: pkg.author,

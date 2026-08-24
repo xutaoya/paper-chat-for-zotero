@@ -88,6 +88,7 @@ import {
   type PaperChatTierRerollResult,
 } from "./PaperChatTierController";
 import { ToolApprovalCoordinator } from "./ToolApprovalCoordinator";
+import { resolveConversationTurnSlice } from "./conversation-turn";
 import {
   createInterruptedAssistantContextMessage,
   stripPendingAndIncompleteToolCallContent,
@@ -3619,6 +3620,91 @@ export class ChatManager {
     if (this.isSessionActive(session)) {
       this.onExecutionPlanUpdate?.(session.executionPlan);
       this.onMessageUpdate?.(session.messages);
+    }
+
+    return true;
+  }
+
+  /**
+   * 删除一轮对话（用户问题及其后的助手/工具消息，直到下一条用户消息）。
+   */
+  async deleteConversationTurn(
+    sessionId: string,
+    assistantMessageId: string,
+  ): Promise<boolean> {
+    await this.init();
+
+    const session = this.getTrackedSessionById(sessionId);
+    if (!session) return false;
+
+    const slice = resolveConversationTurnSlice(
+      session.messages,
+      assistantMessageId,
+    );
+    if (!slice) return false;
+
+    const { start, end } = slice;
+    const deletingActiveTail = end === session.messages.length;
+    const hasStreamingTurn = session.messages
+      .slice(start, end)
+      .some((message) => message.streamingState === "in_progress");
+
+    if (hasStreamingTurn) {
+      await this.cancelSessionTurn(sessionId);
+    } else if (deletingActiveTail && this.activeSessionRunIds.has(sessionId)) {
+      this.invalidateSessionRun(sessionId, { abort: true });
+    }
+
+    const refreshed = this.getTrackedSessionById(sessionId);
+    if (!refreshed) return false;
+
+    const refreshedSlice = resolveConversationTurnSlice(
+      refreshed.messages,
+      assistantMessageId,
+    );
+    if (!refreshedSlice) return false;
+
+    const messagesToDelete = refreshed.messages.slice(
+      refreshedSlice.start,
+      refreshedSlice.end,
+    );
+    if (messagesToDelete.length === 0) return false;
+
+    if (deletingActiveTail) {
+      getToolPermissionManager().denyPendingApprovals({
+        sessionId: refreshed.id,
+        reason:
+          "Pending tool approvals were denied because the conversation turn was deleted.",
+      });
+      this.agentRuntime.cancelPendingUserInputRequests(refreshed.id);
+    }
+
+    for (const message of [...messagesToDelete].reverse()) {
+      await this.sessionStorage.deleteMessage(refreshed.id, message.id);
+    }
+
+    refreshed.messages.splice(
+      refreshedSlice.start,
+      refreshedSlice.end - refreshedSlice.start,
+    );
+    refreshed.executionPlan =
+      deletingActiveTail && refreshed.executionPlan ? undefined : refreshed.executionPlan;
+    if (deletingActiveTail) {
+      refreshed.toolApprovalState = undefined;
+      refreshed.userInputRequestState = undefined;
+      if (!refreshed.toolExecutionState?.results.length) {
+        refreshed.toolExecutionState = undefined;
+      }
+    }
+    clearPaperChatRetryableState(refreshed);
+    refreshed.updatedAt = Date.now();
+    await this.sessionStorage.updateSessionMeta(refreshed);
+
+    if (this.isSessionActive(refreshed)) {
+      if (deletingActiveTail) {
+        this.onExecutionPlanUpdate?.(refreshed.executionPlan);
+      }
+      this.onMessageUpdate?.(refreshed.messages);
     }
 
     return true;

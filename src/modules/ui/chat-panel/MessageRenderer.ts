@@ -61,6 +61,7 @@ type MessageActionIconName =
   | "fork"
   | "quote"
   | "refresh"
+  | "trash"
   | "write";
 const userInputCountdownTimers = new WeakMap<
   HTMLElement,
@@ -459,6 +460,8 @@ export interface MessageRenderOptions {
   onRetryError?: (error: Error) => void;
   onFork?: (assistantMessageId: string) => void | Promise<void>;
   onForkError?: (error: Error) => void;
+  onDeleteTurn?: (assistantMessageId: string) => void | Promise<void>;
+  onDeleteTurnError?: (error: Error) => void;
   onQuoteReply?: (assistantMessageId: string) => void;
   onNavigateToQuotedMessage?: (quote: QuotedMessageRef) => void | Promise<void>;
   onSummarizeReply?: (assistantMessageId: string) => void | Promise<void>;
@@ -1075,6 +1078,8 @@ export function createMessageElement(
     onRerollError,
     renderOptions.onFork,
     renderOptions.onForkError,
+    renderOptions.onDeleteTurn,
+    renderOptions.onDeleteTurnError,
     renderOptions.onQuoteReply,
     renderOptions.onSummarizeReply,
     renderOptions.onSummarizeReplyError,
@@ -1281,6 +1286,50 @@ function createForkButton(
   return btn;
 }
 
+function createDeleteTurnButton(
+  doc: Document,
+  theme: ThemeColors,
+  assistantMessageId: string,
+  onDeleteTurn: (assistantMessageId: string) => void | Promise<void>,
+  onError?: (error: Error) => void,
+): HTMLElement {
+  const label = getString("chat-delete-turn");
+  const btn = createMessageActionButton(doc, theme, label);
+  btn.setAttribute("class", "message-action-btn delete-turn-btn");
+  setIconButtonImage(btn, "trash", "");
+
+  btn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    if (btn.getAttribute("data-busy") === "true") {
+      return;
+    }
+
+    btn.setAttribute("data-busy", "true");
+    btn.setAttribute("aria-busy", "true");
+    (btn as HTMLButtonElement).disabled = true;
+    btn.style.cursor = "wait";
+    btn.style.opacity = "0.6";
+
+    Promise.resolve(onDeleteTurn(assistantMessageId))
+      .catch((error: unknown) => {
+        const deleteError =
+          error instanceof Error ? error : new Error(String(error));
+        ztoolkit.log("[MessageRenderer] Delete turn failed:", deleteError);
+        onError?.(deleteError);
+      })
+      .finally(() => {
+        btn.removeAttribute("data-busy");
+        btn.removeAttribute("aria-busy");
+        (btn as HTMLButtonElement).disabled = false;
+        btn.style.cursor = "pointer";
+        btn.style.opacity = "1";
+      });
+  });
+
+  return btn;
+}
+
 function createQuoteReplyButton(
   doc: Document,
   theme: ThemeColors,
@@ -1380,6 +1429,8 @@ function createMessageActions(
   onRerollError?: (error: Error) => void,
   onFork?: (assistantMessageId: string) => void | Promise<void>,
   onForkError?: (error: Error) => void,
+  onDeleteTurn?: (assistantMessageId: string) => void | Promise<void>,
+  onDeleteTurnError?: (error: Error) => void,
   onQuoteReply?: (assistantMessageId: string) => void,
   onSummarizeReply?: (assistantMessageId: string) => void | Promise<void>,
   onSummarizeReplyError?: (error: Error) => void,
@@ -1463,6 +1514,23 @@ function createMessageActions(
   ) {
     actions.appendChild(
       createForkButton(doc, theme, msg.id, onFork, onForkError),
+    );
+  }
+
+  if (
+    msg.role === "assistant" &&
+    !msg.apiOnly &&
+    msg.streamingState === undefined &&
+    onDeleteTurn
+  ) {
+    actions.appendChild(
+      createDeleteTurnButton(
+        doc,
+        theme,
+        msg.id,
+        onDeleteTurn,
+        onDeleteTurnError,
+      ),
     );
   }
 

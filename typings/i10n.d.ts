@@ -111,6 +111,8 @@ export type FluentMessageId =
   | 'paperchat-chat-debug-context-export'
   | 'paperchat-chat-debug-context-exported'
   | 'paperchat-chat-delete'
+  | 'paperchat-chat-delete-turn'
+  | 'paperchat-chat-delete-turn-failed'
   | 'paperchat-chat-edit-title'
   | 'paperchat-chat-error-no-provider'
   | 'paperchat-chat-error-paperchat-insufficient-quota'
