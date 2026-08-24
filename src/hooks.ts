@@ -43,10 +43,6 @@ import {
   destroyAnalyticsService,
   getAnalyticsService,
 } from "./modules/analytics";
-import {
-  destroyReadingLoopService,
-  initReadingLoopService,
-} from "./modules/reading-loop";
 import { updateSelfIfNeed } from "./utils/selfUpdate";
 import {
   registerReaderChatEntries,
@@ -120,12 +116,6 @@ async function onStartup() {
     getAISummaryService().setOnOpenTaskWindow(openTaskWindow);
   } catch (error) {
     ztoolkit.log("[Startup] AISummary init failed:", error);
-  }
-
-  try {
-    initReadingLoopService();
-  } catch (error) {
-    ztoolkit.log("[Startup] Reading Loop init failed:", error);
   }
 
   // Register UI (toolbar button, menus) — must always run
@@ -205,7 +195,6 @@ async function onShutdown(): Promise<void> {
   // Destroy AISummary
   destroyAISummaryService();
   getAISummaryManager().destroy();
-  destroyReadingLoopService();
   // Destroy Embedding/RAG
   destroyRAGService();
   destroyEmbeddingProviderFactory();

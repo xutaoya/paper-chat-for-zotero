@@ -32,7 +32,6 @@ declare namespace _ZoteroTypes {
       "mineruApiToken": string;
       "panelMode": string;
       "debugContextExportEnabled": boolean;
-      "readingLoopHistory": string;
       "firstInstalledVersion": string;
       "guideStatus": number;
       "contextMaxRecentPairs": number;

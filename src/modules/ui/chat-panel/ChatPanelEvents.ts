@@ -69,7 +69,6 @@ import {
   extractStatusCode,
   isNetworkErrorMessage,
 } from "../../analytics/errorClassify";
-import { getReadingLoopService } from "../../reading-loop";
 import {
   hasConversationMessages,
   shouldResetSummaryButtonBusyState,
@@ -2290,9 +2289,6 @@ async function sendMessage(
           targetSession,
           ...attachmentOptions,
         });
-        if (accepted) {
-          getReadingLoopService().handleChatMessageSent(content, targetItem);
-        }
         return accepted;
       },
     });

@@ -34,7 +34,6 @@ pref("mineruApiToken", "");
 // UI Settings
 pref("panelMode", "sidebar");
 pref("debugContextExportEnabled", false);
-pref("readingLoopHistory", "");
 
 // Guide Settings
 pref("firstInstalledVersion", "");

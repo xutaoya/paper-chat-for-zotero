@@ -212,12 +212,6 @@ paperchat-chat-turn-in-progress = A response is already in progress.
 paperchat-chat-max-planning-iterations-reached = I apologize, but I was unable to complete the request within the allowed number of iterations.
 paperchat-chat-thinking = Thinking
 paperchat-chat-history-title = Chat { $time }
-paperchat-reading-loop-execute = Run
-paperchat-reading-loop-dismiss = Dismiss
-paperchat-reading-loop-view = View
-paperchat-reading-loop-retry = Retry
-paperchat-reading-loop-processing = Processing
-paperchat-reading-loop-tooltip = 1 reading suggestion: { $title }
 
 # Guide
 paperchat-guide-toolbar-title = Start Chatting with AI

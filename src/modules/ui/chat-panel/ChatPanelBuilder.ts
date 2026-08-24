@@ -131,24 +131,6 @@ export function createChatContainer(
   dragBar.appendChild(dragTitle);
   dragBar.appendChild(closeBtn);
 
-  const readingLoopStrip = createElement(
-    doc,
-    "div",
-    {
-      display: "none",
-      alignItems: "center",
-      gap: "8px",
-      minHeight: "36px",
-      padding: "0 10px",
-      background: theme.toolbarBg,
-      borderBottom: `1px solid ${theme.borderColor}`,
-      color: theme.textPrimary,
-      boxSizing: "border-box",
-      flexShrink: "0",
-    },
-    { id: "reading-loop-suggestion-strip" },
-  );
-
   // User Bar
   const userBar = createElement(
     doc,
@@ -1290,7 +1272,6 @@ export function createChatContainer(
   // Assemble
   root.appendChild(dragBar);
   root.appendChild(userBar);
-  root.appendChild(readingLoopStrip);
   root.appendChild(toolbar);
   chatViewport.appendChild(chatHistory);
   chatViewport.appendChild(executionPlanPanel);

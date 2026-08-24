@@ -31,7 +31,7 @@ import { normalizeSourceItemKeys } from "../../chat/note-source-provenance";
 import { isPathInsidePresentationRoot } from "../../presentation";
 import type { PresentationLaunchSettings } from "../../presentation/PresentationLaunchSettings";
 
-import { HTML_NS, type AttachmentState, type ChatPanelContext } from "./types";
+import { type AttachmentState, type ChatPanelContext } from "./types";
 import { chatColors } from "../../../utils/colors";
 import {
   getCurrentTheme,
@@ -100,13 +100,6 @@ import { loadCachedRatios } from "../../preferences/ModelsFetcher";
 import { Guide } from "../Guide";
 import { ANALYTICS_EVENTS, getAnalyticsService } from "../../analytics";
 import { refreshPaperChatNotice } from "../../providers/PaperChatNoticeService";
-import {
-  getReadingLoopService,
-  type ReadingLoopSnapshot,
-  type ReadingLoopState,
-  type ReadingSuggestion,
-} from "../../reading-loop";
-import { bindReadingLoopToolbarButtonEvents } from "./ReadingLoopToolbarEvents";
 import {
   NextQuestionHintController,
   requestNextQuestionHintAfterRecentRender,
@@ -1126,14 +1119,8 @@ let floatingTabNotifierID: string | null = null;
 let panelVisibleSince: number | null = null;
 let panelOpenSource: ChatPanelOpenSource = "unknown";
 let suppressFloatingUnloadTracking = false;
-const readingLoopPanelSubscriptions = new WeakMap<HTMLElement, () => void>();
 const eventHandlerDisposers = new WeakMap<HTMLElement, () => void>();
 const readyPanelContainers = new WeakSet<HTMLElement>();
-let readingLoopExecutorOwner: HTMLElement | null = null;
-let readingLoopToolbarUnsubscribe: (() => void) | null = null;
-let readingLoopLatestSnapshot: ReadingLoopSnapshot | null = null;
-let readingLoopPopoverHideTimer: number | null = null;
-const readingLoopToolbarBoundButtons = new WeakSet<HTMLElement>();
 
 function removeStaleSidebarContainers(doc: Document): void {
   const containers = Array.from(
@@ -1513,7 +1500,6 @@ async function initializeChatContentCommon(
   // Set up chat manager callbacks
   const manager = getChatManager();
   setupChatManagerCallbacks(manager, context, container);
-  setupReadingLoopIntegration(container, context);
 
   // Initialize ChatManager (handles migration and session loading)
   await manager.init();
@@ -1534,78 +1520,6 @@ async function initializeChatContentCommon(
   await flushPendingPanelReadyAction();
 }
 
-function setupReadingLoopIntegration(
-  container: HTMLElement,
-  context: ChatPanelContext,
-): void {
-  const service = getReadingLoopService();
-  readingLoopExecutorOwner = container;
-  service.setExecutor(async ({ suggestion, currentItem }) => {
-    if (!container.isConnected) {
-      throw new Error("PaperChat panel is not available.");
-    }
-    const targetItem =
-      currentItem ||
-      getActiveReaderItem() ||
-      context.getCurrentItem() ||
-      getItemByLibraryKey(suggestion.itemKey);
-    if (targetItem) {
-      context.setCurrentItem(targetItem);
-    }
-
-    const selectedText =
-      typeof suggestion.payload?.selectedText === "string"
-        ? suggestion.payload.selectedText
-        : undefined;
-    const content = buildReadingLoopPrompt(suggestion);
-    const didSend = await context.chatManager.sendMessage(content, {
-      item: targetItem,
-      attachPdf: !!targetItem,
-      selectedText,
-    });
-    if (!didSend) {
-      throw new Error(getString("chat-error-no-provider"));
-    }
-    return {
-      title: "已发送到 PaperChat",
-    };
-  });
-
-  const existingUnsubscribe = readingLoopPanelSubscriptions.get(container);
-  existingUnsubscribe?.();
-  const unsubscribe = service.subscribe((snapshot) => {
-    if (!container.isConnected) {
-      return;
-    }
-    renderReadingLoopSuggestionStrip(container, snapshot);
-    updateReadingLoopEntryIndicator(snapshot);
-  });
-  readingLoopPanelSubscriptions.set(container, unsubscribe);
-}
-
-function cleanupReadingLoopIntegration(container: HTMLElement | null): void {
-  if (!container) {
-    return;
-  }
-
-  const unsubscribe = readingLoopPanelSubscriptions.get(container);
-  unsubscribe?.();
-  readingLoopPanelSubscriptions.delete(container);
-
-  const strip = container.querySelector(
-    "#reading-loop-suggestion-strip",
-  ) as HTMLElement | null;
-  if (strip) {
-    strip.style.display = "none";
-    strip.replaceChildren();
-  }
-
-  if (readingLoopExecutorOwner === container) {
-    readingLoopExecutorOwner = null;
-    getReadingLoopService().setExecutor(null);
-  }
-}
-
 function cleanupPanelIntegrations(
   container: HTMLElement | null,
   disposeEventHandlers: boolean = true,
@@ -1619,190 +1533,6 @@ function cleanupPanelIntegrations(
     eventHandlerDisposers.delete(container);
   }
   NextQuestionHintController.detach(container);
-  cleanupReadingLoopIntegration(container);
-}
-
-function buildReadingLoopPrompt(suggestion: ReadingSuggestion): string {
-  switch (suggestion.kind) {
-    case "highlight_digest":
-      return [
-        "请读取当前论文的高亮和批注，将这些标注整理成一份简洁的阅读笔记。",
-        "要求：",
-        "1. 提炼 3-6 条关键观点或证据。",
-        "2. 保留必要的页码或原文线索。",
-        "3. 将结果追加到这篇论文的 PaperChat Notes 子笔记中。",
-        "4. 完成后简要告诉我写入结果。",
-      ].join("\n");
-    case "save_selection_note":
-      return [
-        "请将当前选中的文本整理成一条简洁阅读笔记，并追加到这篇论文的 PaperChat Notes 子笔记中。",
-        "请先概括要点，再保留必要的原文线索。",
-      ].join("\n");
-    case "explain_visual_context":
-      return [
-        "请解释当前选中的图表、图片或算法线索，并结合论文上下文说明它支撑了什么结论。",
-        "如果需要，请优先读取附近页面、图注、表注或相关段落。",
-      ].join("\n");
-    case "explain_formula":
-      return [
-        "请解释当前选中的公式或数学符号。",
-        "要求说明每个关键变量的含义、公式在论文方法中的作用，以及它和实验/结论的关系。",
-      ].join("\n");
-    case "trace_reference":
-      return [
-        "请追踪当前选中的引用或参考文献线索。",
-        "要求说明这条引用在当前论文中的作用，并尽量结合参考文献信息或上下文解释它为什么重要。",
-      ].join("\n");
-    case "section_checkpoint":
-      return [
-        "请基于当前论文的阅读位置附近内容，生成一个非常简洁的段落 checkpoint。",
-        "包括：这一段在解决什么问题、已有结论、下一步阅读时要注意什么。",
-      ].join("\n");
-    case "reading_checkpoint":
-      return [
-        "请基于当前论文、已有标注和最近对话，生成本次阅读 checkpoint。",
-        "包括：当前已理解的主线、仍未解决的问题、接下来最值得读的部分。",
-      ].join("\n");
-    case "followup_questions":
-      return [
-        "我刚才围绕这篇论文连续提出了一些问题。请把这些问题整理成一条清晰的阅读路线。",
-        "要求区分：概念澄清、方法细节、证据/实验、下一步需要查的内容。",
-      ].join("\n");
-    case "explain_selection":
-    default:
-      return "解释当前选中的文本，并结合这篇论文的上下文说明它为什么重要。";
-  }
-}
-
-function renderReadingLoopSuggestionStrip(
-  container: HTMLElement,
-  snapshot: ReadingLoopSnapshot,
-): void {
-  const strip = container.querySelector(
-    "#reading-loop-suggestion-strip",
-  ) as HTMLElement | null;
-  if (!strip) {
-    return;
-  }
-
-  const suggestion = snapshot.activeSuggestion;
-  if (!snapshot.enabled || !suggestion || snapshot.state === "idle") {
-    strip.style.display = "none";
-    strip.textContent = "";
-    return;
-  }
-
-  const theme = getCurrentTheme();
-  strip.textContent = "";
-  strip.style.display = "flex";
-  strip.style.background = theme.toolbarBg;
-  strip.style.borderBottomColor = theme.borderColor;
-  strip.style.color = theme.textPrimary;
-
-  const dot = strip.ownerDocument.createElementNS(HTML_NS, "span");
-  Object.assign(dot.style, {
-    width: "7px",
-    height: "7px",
-    borderRadius: "999px",
-    background: getReadingLoopAccent(snapshot.state),
-    flexShrink: "0",
-  } satisfies Partial<CSSStyleDeclaration>);
-
-  const title = strip.ownerDocument.createElementNS(HTML_NS, "span");
-  title.textContent = suggestion.title;
-  Object.assign(title.style, {
-    flex: "1",
-    minWidth: "0",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    fontSize: "12px",
-    lineHeight: "18px",
-  } satisfies Partial<CSSStyleDeclaration>);
-
-  const primary = strip.ownerDocument.createElementNS(
-    HTML_NS,
-    "button",
-  ) as HTMLButtonElement;
-  primary.type = "button";
-  primary.textContent = getReadingLoopPrimaryActionLabel(snapshot.state);
-  primary.disabled = snapshot.state === "running";
-  Object.assign(primary.style, {
-    border: "none",
-    background: "transparent",
-    color: getReadingLoopAccent(snapshot.state),
-    cursor: snapshot.state === "running" ? "default" : "pointer",
-    padding: "2px 4px",
-    fontSize: "12px",
-    fontWeight: "600",
-    flexShrink: "0",
-    opacity: snapshot.state === "running" ? "0.75" : "1",
-  } satisfies Partial<CSSStyleDeclaration>);
-  primary.addEventListener("click", () => {
-    if (snapshot.state === "running") {
-      return;
-    }
-    if (snapshot.state === "completed") {
-      getReadingLoopService().viewResult(suggestion.id);
-      return;
-    }
-    void getReadingLoopService().acceptSuggestion(suggestion.id);
-  });
-
-  const close = strip.ownerDocument.createElementNS(
-    HTML_NS,
-    "button",
-  ) as HTMLButtonElement;
-  close.type = "button";
-  close.textContent = "×";
-  close.title = getString("reading-loop-dismiss");
-  Object.assign(close.style, {
-    border: "none",
-    background: "transparent",
-    color: theme.textMuted,
-    cursor: "pointer",
-    padding: "2px 3px",
-    fontSize: "14px",
-    lineHeight: "16px",
-    flexShrink: "0",
-  } satisfies Partial<CSSStyleDeclaration>);
-  close.addEventListener("click", () => {
-    getReadingLoopService().dismissSuggestion(suggestion.id);
-  });
-
-  strip.appendChild(dot);
-  strip.appendChild(title);
-  strip.appendChild(primary);
-  if (snapshot.state !== "running") {
-    strip.appendChild(close);
-  }
-}
-
-function getReadingLoopPrimaryActionLabel(state: ReadingLoopState): string {
-  switch (state) {
-    case "completed":
-      return getString("reading-loop-view");
-    case "attention":
-      return getString("reading-loop-retry");
-    case "running":
-      return getString("reading-loop-processing");
-    case "suggested":
-    default:
-      return getString("reading-loop-execute");
-  }
-}
-
-function getReadingLoopAccent(state: ReadingLoopState): string {
-  switch (state) {
-    case "completed":
-      return "#16a34a";
-    case "attention":
-      return "#f97316";
-    case "running":
-    case "suggested":
-    default:
-      return "#2563eb";
-  }
 }
 
 /**
@@ -1818,14 +1548,12 @@ async function syncChatSessionForActiveItem(
   if (item) {
     moduleCurrentItem = item;
     manager.setCurrentItemKey(item.key, item.libraryID);
-    getReadingLoopService().setCurrentItem(item);
     await updatePdfCheckboxVisibilityForItem(container, item, manager);
     return manager.activateSessionForItem(item);
   }
 
   moduleCurrentItem = null;
   manager.setCurrentItemKey(null);
-  getReadingLoopService().setCurrentItem(null);
   await updatePdfCheckboxVisibilityForItem(container, null, manager);
   return manager.getActiveSession();
 }
@@ -2096,7 +1824,6 @@ function showSidebarPanel(): boolean {
     const context = createContext(chatContainer);
     NextQuestionHintController.attach(context);
     setupChatManagerCallbacks(manager, context, chatContainer);
-    setupReadingLoopIntegration(chatContainer, context);
     refreshChatForCurrentItem();
   }
 
@@ -2432,7 +2159,6 @@ export function showPanelForItem(
   moduleCurrentItem = item;
   const manager = getChatManager();
   manager.setCurrentItemKey(item.key, item.libraryID);
-  getReadingLoopService().setCurrentItem(item);
   showPanel(source);
 
   if (!isPanelShown()) {
@@ -2466,7 +2192,6 @@ async function focusRunningPresentationTaskUnsafe(
 
   moduleCurrentItem = item;
   manager.setCurrentItemKey(item.key, item.libraryID);
-  getReadingLoopService().setCurrentItem(item);
   pendingPanelItem = item;
   showPanel(source);
   if (!isPanelShown()) {
@@ -2577,283 +2302,6 @@ function updateToolbarButtonState(pressed: boolean): void {
   }
 }
 
-function updateReadingLoopEntryIndicator(snapshot: ReadingLoopSnapshot): void {
-  readingLoopLatestSnapshot = snapshot;
-  const doc = Zotero.getMainWindow().document;
-  const button = doc.getElementById(
-    `${config.addonRef}-toolbar-button`,
-  ) as HTMLElement | null;
-  if (!button) {
-    return;
-  }
-
-  let indicator = button.querySelector(
-    "#paperchat-reading-loop-indicator",
-  ) as HTMLElement | null;
-  if (
-    !snapshot.enabled ||
-    snapshot.state === "idle" ||
-    !snapshot.activeSuggestion
-  ) {
-    indicator?.remove();
-    hideReadingLoopPopover(doc, 0);
-    button.setAttribute(
-      "title",
-      getString(
-        "chat-toolbar-button-tooltip" as Parameters<typeof getString>[0],
-      ),
-    );
-    return;
-  }
-
-  ensureReadingLoopIndicatorStyles(doc);
-
-  const visiblePopover = doc.getElementById(
-    "paperchat-reading-loop-popover",
-  ) as HTMLElement | null;
-  if (visiblePopover?.style.display === "block") {
-    showReadingLoopPopover(button);
-  }
-
-  if (!indicator) {
-    indicator = doc.createElementNS(HTML_NS, "span");
-    indicator.id = "paperchat-reading-loop-indicator";
-    button.appendChild(indicator);
-  }
-  indicator.setAttribute("data-reading-loop-state", snapshot.state);
-
-  button.setAttribute(
-    "title",
-    getString("reading-loop-tooltip", {
-      args: { title: snapshot.activeSuggestion.title },
-    }),
-  );
-
-  Object.assign(indicator.style, {
-    position: "absolute",
-    pointerEvents: "none",
-    boxSizing: "border-box",
-  } satisfies Partial<CSSStyleDeclaration>);
-
-  if (snapshot.state === "running") {
-    Object.assign(indicator.style, {
-      top: "2px",
-      right: "2px",
-      left: "auto",
-      bottom: "auto",
-      minWidth: "0",
-      width: "12px",
-      height: "12px",
-      borderRadius: "999px",
-      border: "2px solid rgba(37, 99, 235, 0.95)",
-      borderTopColor: "rgba(37, 99, 235, 0.18)",
-      background: "transparent",
-      color: "transparent",
-      display: "block",
-      fontSize: "0",
-      lineHeight: "0",
-    } satisfies Partial<CSSStyleDeclaration>);
-    indicator.textContent = "";
-    return;
-  }
-
-  Object.assign(indicator.style, {
-    top: "3px",
-    right: "3px",
-    left: "auto",
-    bottom: "auto",
-    minWidth: "0",
-    width: snapshot.state === "completed" ? "12px" : "7px",
-    height: snapshot.state === "completed" ? "12px" : "7px",
-    borderRadius: "999px",
-    border: "1px solid var(--material-background, #fff)",
-    background: getReadingLoopAccent(snapshot.state),
-    color: "#fff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "9px",
-    lineHeight: "12px",
-    fontWeight: "700",
-  } satisfies Partial<CSSStyleDeclaration>);
-  indicator.textContent = snapshot.state === "completed" ? "✓" : "";
-}
-
-function ensureReadingLoopIndicatorStyles(doc: Document): void {
-  if (doc.getElementById("paperchat-reading-loop-indicator-style")) {
-    return;
-  }
-
-  const style = doc.createElementNS(HTML_NS, "style") as HTMLStyleElement;
-  style.id = "paperchat-reading-loop-indicator-style";
-  style.textContent = `
-    #paperchat-reading-loop-indicator[data-reading-loop-state="suggested"] {
-      animation: paperchat-reading-loop-pulse 1.6s ease-in-out infinite;
-    }
-
-    #paperchat-reading-loop-indicator[data-reading-loop-state="running"] {
-      animation: paperchat-reading-loop-spin 0.85s linear infinite;
-    }
-
-    @keyframes paperchat-reading-loop-pulse {
-      0%, 100% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.38);
-      }
-      50% {
-        transform: scale(1.14);
-        box-shadow: 0 0 0 5px rgba(37, 99, 235, 0);
-      }
-    }
-
-    @keyframes paperchat-reading-loop-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `;
-  doc.documentElement.appendChild(style);
-}
-
-function ensureReadingLoopToolbarSubscription(): void {
-  readingLoopToolbarUnsubscribe?.();
-  readingLoopToolbarUnsubscribe = getReadingLoopService().subscribe(
-    updateReadingLoopEntryIndicator,
-  );
-}
-
-function bindReadingLoopToolbarEvents(button: HTMLElement): void {
-  if (readingLoopToolbarBoundButtons.has(button)) {
-    return;
-  }
-
-  readingLoopToolbarBoundButtons.add(button);
-  bindReadingLoopToolbarButtonEvents(button, {
-    togglePanel: () => togglePanel("toolbar"),
-    isPanelShown,
-    showPopover: showReadingLoopPopover,
-    hidePopover: hideReadingLoopPopover,
-  });
-}
-
-function getReadingLoopPopover(doc: Document): HTMLElement {
-  let popover = doc.getElementById(
-    "paperchat-reading-loop-popover",
-  ) as HTMLElement | null;
-  if (popover) {
-    return popover;
-  }
-
-  popover = doc.createElementNS(HTML_NS, "div") as HTMLElement;
-  popover.id = "paperchat-reading-loop-popover";
-  Object.assign(popover.style, {
-    position: "fixed",
-    zIndex: "10004",
-    display: "none",
-    minWidth: "180px",
-    maxWidth: "260px",
-    padding: "8px 10px",
-    borderRadius: "6px",
-    boxSizing: "border-box",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
-    pointerEvents: "none",
-  } satisfies Partial<CSSStyleDeclaration>);
-  doc.documentElement.appendChild(popover);
-  return popover;
-}
-
-function showReadingLoopPopover(anchor: HTMLElement): void {
-  const win = anchor.ownerDocument.defaultView;
-  if (!win) {
-    return;
-  }
-  if (readingLoopPopoverHideTimer != null) {
-    win.clearTimeout(readingLoopPopoverHideTimer);
-    readingLoopPopoverHideTimer = null;
-  }
-
-  const snapshot = readingLoopLatestSnapshot;
-  const suggestion = snapshot?.activeSuggestion;
-  if (!snapshot?.enabled || !suggestion || snapshot.state === "idle") {
-    hideReadingLoopPopover(anchor.ownerDocument, 0);
-    return;
-  }
-
-  const doc = anchor.ownerDocument;
-  const theme = getCurrentTheme();
-  const popover = getReadingLoopPopover(doc);
-  popover.replaceChildren();
-
-  const title = doc.createElementNS(HTML_NS, "div") as HTMLElement;
-  title.textContent = suggestion.title;
-  Object.assign(title.style, {
-    color: theme.textPrimary,
-    fontSize: "12px",
-    fontWeight: "600",
-    lineHeight: "16px",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  } satisfies Partial<CSSStyleDeclaration>);
-
-  const meta = doc.createElementNS(HTML_NS, "div") as HTMLElement;
-  meta.textContent =
-    snapshot.state === "running"
-      ? getString("reading-loop-processing")
-      : suggestion.reason ||
-        getString("reading-loop-tooltip", {
-          args: { title: suggestion.title },
-        });
-  Object.assign(meta.style, {
-    color: theme.textMuted,
-    fontSize: "11px",
-    lineHeight: "15px",
-    marginTop: "2px",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  } satisfies Partial<CSSStyleDeclaration>);
-
-  popover.appendChild(title);
-  popover.appendChild(meta);
-  Object.assign(popover.style, {
-    display: "block",
-    background: theme.dropdownBg,
-    border: `1px solid ${theme.borderColor}`,
-  } satisfies Partial<CSSStyleDeclaration>);
-
-  const anchorRect = anchor.getBoundingClientRect();
-  const popoverRect = popover.getBoundingClientRect();
-  const viewportWidth = doc.defaultView?.innerWidth || anchorRect.right + 260;
-  const left = Math.max(
-    8,
-    Math.min(
-      anchorRect.right - popoverRect.width,
-      viewportWidth - popoverRect.width - 8,
-    ),
-  );
-  const top = anchorRect.bottom + 6;
-  popover.style.left = `${left}px`;
-  popover.style.top = `${top}px`;
-}
-
-function hideReadingLoopPopover(doc: Document, delayMs = 120): void {
-  const win = doc.defaultView;
-  if (!win) {
-    return;
-  }
-  if (readingLoopPopoverHideTimer != null) {
-    win.clearTimeout(readingLoopPopoverHideTimer);
-  }
-  readingLoopPopoverHideTimer = win.setTimeout(() => {
-    const popover = doc.getElementById("paperchat-reading-loop-popover");
-    if (popover) {
-      (popover as HTMLElement).style.display = "none";
-    }
-    readingLoopPopoverHideTimer = null;
-  }, delayMs);
-}
-
 /**
  * Sync sidebar state based on panel visibility and mode
  */
@@ -2919,9 +2367,6 @@ export function registerToolbarButton(): void {
     `${config.addonRef}-toolbar-button`,
   ) as HTMLElement | null;
   if (existingButton) {
-    existingButton.style.position = "relative";
-    ensureReadingLoopToolbarSubscription();
-    bindReadingLoopToolbarEvents(existingButton);
     return;
   }
 
@@ -2949,7 +2394,6 @@ export function registerToolbarButton(): void {
         backgroundPosition: "center",
         backgroundSize: "18px",
         display: "flex",
-        position: "relative",
         width: "28px",
         height: "28px",
         alignItems: "center",
@@ -2960,8 +2404,7 @@ export function registerToolbarButton(): void {
     anchor.nextElementSibling as Element,
   ) as HTMLElement;
 
-  ensureReadingLoopToolbarSubscription();
-  bindReadingLoopToolbarEvents(button);
+  button.addEventListener("click", () => togglePanel("toolbar"));
 
   // Register global tab notifier for sidebar sync across tabs
   registerGlobalTabNotifier();
@@ -2979,16 +2422,11 @@ export function registerToolbarButton(): void {
  * Unregister toolbar button
  */
 export function unregisterToolbarButton(): void {
-  readingLoopToolbarUnsubscribe?.();
-  readingLoopToolbarUnsubscribe = null;
-
   const doc = Zotero.getMainWindow().document;
   const button = doc.getElementById(`${config.addonRef}-toolbar-button`);
   if (button) {
     button.remove();
   }
-  doc.getElementById("paperchat-reading-loop-popover")?.remove();
-  doc.getElementById("paperchat-reading-loop-indicator-style")?.remove();
 
   // Unregister global tab notifier
   unregisterGlobalTabNotifier();
