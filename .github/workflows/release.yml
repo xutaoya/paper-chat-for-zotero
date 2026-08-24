@@ -2,8 +2,7 @@ name: Release
 
 # This workflow is intentionally inlined instead of using
 # zotero-plugin-dev/workflows/.github/workflows/release-plugin.yml because that
-# reusable workflow checks out submodules recursively through setup-js. The api
-# submodule is deployment-only and should not be required for plugin releases.
+# reusable workflow checks out submodules recursively through setup-js.
 # When updating this workflow, compare against:
 # https://github.com/zotero-plugin-dev/workflows/blob/main/.github/workflows/release-plugin.yml
 # https://github.com/zotero-plugin-dev/workflows/blob/main/setup-js/action.yml
