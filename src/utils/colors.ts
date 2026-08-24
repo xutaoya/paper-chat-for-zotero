@@ -129,6 +129,11 @@ export const chatColors = {
   errorBubbleBorder: colors.errorBorder,
   errorBubbleText: colors.error,
 
+  // Success message
+  successBubbleBg: authColors.successBg,
+  successBubbleBorder: authColors.successBorder,
+  successBubbleText: authColors.successText,
+
   // History dropdown
   historyAccent: colors.primary,
   loadMoreBg: colors.primaryLight,

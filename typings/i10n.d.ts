@@ -108,6 +108,8 @@ export type FluentMessageId =
   | 'paperchat-chat-conversation-nav-label'
   | 'paperchat-chat-copy'
   | 'paperchat-chat-copy-reply-note-no-item'
+  | 'paperchat-chat-copy-reply-note-success'
+  | 'paperchat-chat-create-item-note-success'
   | 'paperchat-chat-debug-context-export'
   | 'paperchat-chat-debug-context-exported'
   | 'paperchat-chat-delete'

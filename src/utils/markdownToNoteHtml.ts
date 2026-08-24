@@ -1,4 +1,8 @@
 import MarkdownIt from "markdown-it";
+import {
+  renderMathInMarkdownForNotes,
+  restorePreservedNoteMarkup,
+} from "./renderMathInMarkdownForNotes";
 
 const noteMarkdown = new MarkdownIt({
   html: false,
@@ -34,10 +38,34 @@ export function withLeadingNoteHeading(html: string, title: string): string {
   return trimmed ? `${heading}\n${trimmed}` : heading;
 }
 
+export function compactMathLineSpacing(markdown: string): string {
+  const isMathLine = (line: string) =>
+    /^\s*(\$\$[\s\S]+\$\$|\$[^$\n]+\$)\s*$/.test(line);
+  const lines = markdown.split("\n");
+  const result: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (
+      line.trim() === "" &&
+      isMathLine(lines[i + 1] ?? "") &&
+      isMathLine(lines[i - 1] ?? "")
+    ) {
+      continue;
+    }
+    result.push(line);
+  }
+  return result.join("\n");
+}
+
 export function markdownToNoteHtml(markdown: string): string {
-  const trimmed = markdown.trim();
+  const trimmed = compactMathLineSpacing(markdown.trim());
   if (!trimmed) {
     return "";
   }
-  return noteMarkdown.render(trimmed).trim();
+  const { processed, preserved } = renderMathInMarkdownForNotes(trimmed, {
+    renderCodeBlock: (match) => noteMarkdown.render(match),
+    renderInlineCode: (match) => noteMarkdown.renderInline(match),
+  });
+  const html = noteMarkdown.render(processed).trim();
+  return restorePreservedNoteMarkup(html, preserved);
 }

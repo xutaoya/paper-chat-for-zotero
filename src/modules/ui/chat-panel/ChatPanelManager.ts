@@ -12,6 +12,7 @@ import type {
   FileAttachment,
   QuotedMessageRef,
   ToolApprovalState,
+  AgentRuntimeToolCompletedEvent,
 } from "../../../types/chat";
 import type {
   RequestUserInputResponse,
@@ -767,6 +768,94 @@ function resolveItemKeyForReplyNote(
   return null;
 }
 
+function getItemTitleByKey(itemKey: string): string {
+  const item = getItemByLibraryKey(itemKey);
+  return item?.getDisplayTitle?.() || itemKey;
+}
+
+function appendChatStatusMessage(
+  container: HTMLElement | null,
+  message: string,
+  kind: "error" | "success",
+): void {
+  if (!container) {
+    return;
+  }
+
+  const chatHistory = container.querySelector("#chat-history") as HTMLElement;
+  const doc = container.ownerDocument;
+  if (!chatHistory || !doc) {
+    return;
+  }
+
+  const isError = kind === "error";
+  const wrapper = doc.createElement("div");
+  wrapper.className = `message-wrapper ${isError ? "error" : "success"}-message-wrapper`;
+
+  const bubble = doc.createElement("div");
+  bubble.className = `message-bubble ${isError ? "error" : "success"}-bubble`;
+  bubble.style.cssText = isError
+    ? `background: ${chatColors.errorBubbleBg}; border: 1px solid ${chatColors.errorBubbleBorder}; color: ${chatColors.errorBubbleText}; padding: 12px; border-radius: 8px; margin: 8px 0;`
+    : `background: ${chatColors.successBubbleBg}; border: 1px solid ${chatColors.successBubbleBorder}; color: ${chatColors.successBubbleText}; padding: 12px; border-radius: 8px; margin: 8px 0;`;
+
+  const content = doc.createElement("div");
+  content.className = "message-content";
+  content.textContent = isError ? `⚠️ ${message}` : `✓ ${message}`;
+
+  bubble.appendChild(content);
+  wrapper.appendChild(bubble);
+  chatHistory.appendChild(wrapper);
+  if (shouldAutoScrollChatHistory(chatHistory)) {
+    scrollChatHistoryToBottom(chatHistory);
+  } else {
+    updateChatHistoryScrollBottomButton(chatHistory);
+  }
+}
+
+function handleNoteToolCompleted(
+  context: ChatPanelContext,
+  event: AgentRuntimeToolCompletedEvent,
+): void {
+  if (event.status !== "completed" || event.resultPreview.startsWith("Error:")) {
+    return;
+  }
+
+  if (event.toolName === "create_note") {
+    let itemKey: string | null = null;
+    try {
+      const args = JSON.parse(event.args) as { itemKey?: string };
+      itemKey = args.itemKey ?? context.getCurrentItem()?.key ?? null;
+    } catch {
+      itemKey = context.getCurrentItem()?.key ?? null;
+    }
+    if (!itemKey) {
+      return;
+    }
+    context.appendSuccess(
+      getString("chat-create-item-note-success", {
+        args: { title: getItemTitleByKey(itemKey) },
+      }),
+    );
+    return;
+  }
+
+  if (event.toolName === "append_to_note") {
+    if (!/Created new note:\s*yes/i.test(event.resultPreview)) {
+      return;
+    }
+    const match = event.resultPreview.match(/under item "([^"]+)"/);
+    const itemKey = match?.[1] ?? context.getCurrentItem()?.key ?? null;
+    if (!itemKey) {
+      return;
+    }
+    context.appendSuccess(
+      getString("chat-create-item-note-success", {
+        args: { title: getItemTitleByKey(itemKey) },
+      }),
+    );
+  }
+}
+
 async function copyReplyToItemNote(
   context: ChatPanelContext,
   assistantMessageId: string,
@@ -800,6 +889,12 @@ async function copyReplyToItemNote(
   if (result.startsWith("Error:")) {
     throw new Error(result.replace(/^Error:\s*/, ""));
   }
+
+  context.appendSuccess(
+    getString("chat-copy-reply-note-success", {
+      args: { title: getItemTitleByKey(itemKey) },
+    }),
+  );
 }
 
 function buildApprovalActionsForContainer(
@@ -1953,6 +2048,9 @@ function setupChatManagerCallbacks(
       ) {
         context.renderExecutionPlan(manager.getActiveSession()?.executionPlan);
       }
+      if (event.type === "tool_completed") {
+        handleNoteToolCompleted(context, event);
+      }
     },
     onError: (error) => {
       ztoolkit.log("[ChatPanel] API Error:", error.message);
@@ -2852,42 +2950,10 @@ function createContext(container: HTMLElement): ChatPanelContext {
         "[ChatPanel] appendError called:",
         errorMessage.substring(0, 100),
       );
-      ztoolkit.log("[ChatPanel] container:", container ? "exists" : "null");
-
-      if (container) {
-        const chatHistory = container.querySelector(
-          "#chat-history",
-        ) as HTMLElement;
-        const doc = container.ownerDocument;
-        ztoolkit.log(
-          "[ChatPanel] chatHistory:",
-          chatHistory ? "exists" : "null",
-        );
-        ztoolkit.log("[ChatPanel] doc:", doc ? "exists" : "null");
-
-        if (chatHistory && doc) {
-          const wrapper = doc.createElement("div");
-          wrapper.className = "message-wrapper error-message-wrapper";
-
-          const bubble = doc.createElement("div");
-          bubble.className = "message-bubble error-bubble";
-          bubble.style.cssText = `background: ${chatColors.errorBubbleBg}; border: 1px solid ${chatColors.errorBubbleBorder}; color: ${chatColors.errorBubbleText}; padding: 12px; border-radius: 8px; margin: 8px 0;`;
-
-          const content = doc.createElement("div");
-          content.className = "message-content";
-          content.textContent = `⚠️ ${errorMessage}`;
-
-          bubble.appendChild(content);
-          wrapper.appendChild(bubble);
-          chatHistory.appendChild(wrapper);
-          if (shouldAutoScrollChatHistory(chatHistory)) {
-            scrollChatHistoryToBottom(chatHistory);
-          } else {
-            updateChatHistoryScrollBottomButton(chatHistory);
-          }
-          ztoolkit.log("[ChatPanel] Error message appended to chat history");
-        }
-      }
+      appendChatStatusMessage(container, errorMessage, "error");
+    },
+    appendSuccess: (message: string) => {
+      appendChatStatusMessage(container, message, "success");
     },
     rerollPaperChatTierForCurrentSession: async () => {
       const reroute = await manager.rerollCurrentPaperChatFailureAndRetry();

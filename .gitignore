@@ -1,5 +1,6 @@
 # dot files
 .DS_Store
+.codegraph/
 .claude
 CLAUDE.md
 AGENTS.md

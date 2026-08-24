@@ -98,6 +98,7 @@ export interface ChatPanelContext {
   ) => void;
   renderExecutionPlan: (plan?: ExecutionPlan) => void;
   appendError: (errorMessage: string) => void;
+  appendSuccess: (message: string) => void;
   rerollPaperChatTierForCurrentSession: () => Promise<{
     previousModel: string;
     nextModel: string;

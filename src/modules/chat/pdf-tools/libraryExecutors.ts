@@ -34,6 +34,7 @@ import type {
 import { getErrorMessage, getItemTitleSmart } from "../../../utils/common";
 import {
   formatNoteDateTime,
+  markdownToNoteHtml,
   withLeadingNoteHeading,
 } from "../../../utils/markdownToNoteHtml";
 
@@ -68,15 +69,6 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 function noteContentToHtml(
   content: string,
   format: "plain" | "html" = "plain",
@@ -84,14 +76,7 @@ function noteContentToHtml(
   if (format === "html") {
     return content;
   }
-  return content
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
-    .map(
-      (paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br/>")}</p>`,
-    )
-    .join("\n");
+  return markdownToNoteHtml(content);
 }
 
 function resolveParentItemForNote(itemKey: string): Zotero.Item | string {
