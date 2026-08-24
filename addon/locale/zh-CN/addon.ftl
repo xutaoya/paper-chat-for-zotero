@@ -1,4 +1,4 @@
-paperchat-prefs-title = Paper Chat
+paperchat-prefs-title = AI 论文对话 (xutao)
 paperchat-prefs-mineru-title = MinerU
 
 # Auth Dialog
