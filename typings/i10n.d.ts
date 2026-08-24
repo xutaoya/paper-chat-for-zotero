@@ -104,6 +104,8 @@ export type FluentMessageId =
   | 'paperchat-chat-configure-provider'
   | 'paperchat-chat-continue-in-new-chat'
   | 'paperchat-chat-continue-in-new-chat-failed'
+  | 'paperchat-chat-conversation-nav-item'
+  | 'paperchat-chat-conversation-nav-label'
   | 'paperchat-chat-copy'
   | 'paperchat-chat-copy-reply-note-no-item'
   | 'paperchat-chat-debug-context-export'

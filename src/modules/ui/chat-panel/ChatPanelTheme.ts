@@ -4,6 +4,7 @@
 
 import type { ThemeColors } from "./types";
 import { updateHistoryDropdownSearchTheme } from "./HistoryDropdown";
+import { updateConversationNavigatorTheme } from "./ConversationNavigator";
 
 // Light theme colors
 export const lightTheme: ThemeColors = {
@@ -126,6 +127,8 @@ export function applyThemeToContainer(container: HTMLElement): void {
     scrollBottomBtn.style.borderColor = theme.borderColor;
     scrollBottomBtn.style.color = theme.textPrimary;
   }
+
+  updateConversationNavigatorTheme(container, theme);
 
   container.querySelectorAll(".typing-indicator span").forEach((dot) => {
     (dot as HTMLElement).style.background = theme.textMuted;

@@ -47,6 +47,10 @@ import {
   formatMentionReference,
 } from "./MentionSelector";
 import {
+  disposeConversationNavigator,
+  ensureConversationNavigator,
+} from "./ConversationNavigator";
+import {
   scrollToAndHighlightMessage,
   scrollChatHistoryToBottom,
   shouldAutoScrollChatHistory,
@@ -730,6 +734,7 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
   const emptyState = container.querySelector(
     "#chat-empty-state",
   ) as HTMLElement;
+  let conversationNavigator: ReturnType<typeof ensureConversationNavigator> = null;
   let submitPending = false;
   const submitMessage = async (): Promise<void> => {
     if (submitPending) return;
@@ -816,6 +821,7 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
   if (chatHistory) {
     chatHistory.addEventListener("scroll", () => {
       updateChatHistoryAutoScrollState(chatHistory);
+      conversationNavigator?.syncScroll();
     });
     updateChatHistoryScrollBottomButton(chatHistory);
   }
@@ -1654,6 +1660,19 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
 
   // @ Mention selector
   disposers.push(setupMentionSelector(context));
+
+  // Conversation navigator (non-critical; must not block panel controls)
+  try {
+    conversationNavigator = ensureConversationNavigator(
+      container,
+      getCurrentTheme(),
+    );
+    const activeSession = chatManager.getActiveSession();
+    conversationNavigator?.update(activeSession?.messages || []);
+    disposers.push(() => disposeConversationNavigator(container));
+  } catch (error) {
+    ztoolkit.log("[ChatPanel] Conversation navigator init failed:", error);
+  }
 
   ztoolkit.log("Event listeners attached to buttons");
 

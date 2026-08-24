@@ -56,6 +56,7 @@ import {
   updateUserInputRequestView,
   type ApprovalViewTransitionState,
 } from "./MessageRenderer";
+import { ensureConversationNavigator } from "./ConversationNavigator";
 import {
   type MarkdownRenderOptions,
   type SourceGroupActionContext,
@@ -3333,7 +3334,13 @@ function createContext(container: HTMLElement): ChatPanelContext {
                 context.appendError(error.message);
               },
               onMarkdownError: context.appendError,
-              onRenderComplete,
+              onRenderComplete: () => {
+                ensureConversationNavigator(
+                  container,
+                  getCurrentTheme(),
+                )?.update(messages);
+                onRenderComplete?.();
+              },
             },
           );
         }

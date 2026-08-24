@@ -181,11 +181,17 @@ function centerMessageInChatHistory(
   updateChatHistoryScrollBottomButton(chatHistory);
 }
 
-/**
- * Center and briefly flash the rendered message bubble. Repeated calls replace
- * the previous lease so a timer from an earlier render cannot clear a newer
- * highlight.
- */
+/** Center a rendered message in the chat viewport without highlighting it. */
+export function scrollMessageToViewportCenter(
+  chatHistory: HTMLElement,
+  messageId: string,
+): HTMLElement | null {
+  const messageElement = findRenderedMessageElement(chatHistory, messageId);
+  if (!messageElement) return null;
+  centerMessageInChatHistory(chatHistory, messageElement);
+  return messageElement;
+}
+
 export function scrollToAndHighlightMessage(
   chatHistory: HTMLElement,
   messageId: string,
