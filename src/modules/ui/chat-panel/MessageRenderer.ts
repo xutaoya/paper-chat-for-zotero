@@ -61,6 +61,7 @@ type MessageActionIconName =
   | "fork"
   | "quote"
   | "refresh"
+  | "thinking"
   | "trash"
   | "write";
 const userInputCountdownTimers = new WeakMap<
@@ -1134,10 +1135,24 @@ function createReasoningContainer(
   });
   arrow.textContent = "\u25B6";
 
+  const thinkingIcon = createMessageActionIcon(
+    doc,
+    "thinking",
+    getString("chat-thinking"),
+  );
+  Object.assign(thinkingIcon.style, {
+    width: "14px",
+    height: "14px",
+    opacity: isStreaming ? "0.85" : "0.65",
+    flexShrink: "0",
+    animation: isStreaming ? "paperchat-thinking-spin 2.4s linear infinite" : "",
+  });
+
   const label = createElement(doc, "span", {});
-  label.textContent = `\uD83D\uDCAD ${getString("chat-thinking")}`;
+  label.textContent = getString("chat-thinking");
 
   header.appendChild(arrow);
+  header.appendChild(thinkingIcon);
   header.appendChild(label);
 
   // Body

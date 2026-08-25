@@ -694,6 +694,18 @@
   }
 }
 
+@keyframes paperchat-thinking-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [src*="thinking.svg"] {
+    animation: none !important;
+  }
+}
+
 /* Paper Chat - composer input (suppress native focus chrome) */
 #chat-message-input,
 #chat-message-input:focus,
