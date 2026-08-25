@@ -2,6 +2,7 @@ import MarkdownIt from "markdown-it";
 import {
   renderMathInMarkdownForNotes,
   restorePreservedNoteMarkup,
+  unwrapBlockMathParagraphs,
 } from "./renderMathInMarkdownForNotes";
 
 const noteMarkdown = new MarkdownIt({
@@ -40,7 +41,7 @@ export function withLeadingNoteHeading(html: string, title: string): string {
 
 export function compactMathLineSpacing(markdown: string): string {
   const isMathLine = (line: string) =>
-    /^\s*(\$\$[\s\S]+\$\$|\$[^$\n]+\$)\s*$/.test(line);
+    /^\s*(\$\$[\s\S]+\$\$|\$[^$\n]+\$)/.test(line);
   const lines = markdown.split("\n");
   const result: string[] = [];
   for (let i = 0; i < lines.length; i++) {
@@ -67,5 +68,7 @@ export function markdownToNoteHtml(markdown: string): string {
     renderInlineCode: (match) => noteMarkdown.renderInline(match),
   });
   const html = noteMarkdown.render(processed).trim();
-  return restorePreservedNoteMarkup(html, preserved);
+  return unwrapBlockMathParagraphs(
+    restorePreservedNoteMarkup(html, preserved),
+  );
 }
