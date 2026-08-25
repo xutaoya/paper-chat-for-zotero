@@ -693,3 +693,90 @@
     background: #333;
   }
 }
+
+/* Paper Chat - composer input (suppress native focus chrome) */
+#chat-message-input,
+#chat-message-input:focus,
+#chat-message-input:focus-visible {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+#chat-context-item-banner,
+#chat-context-item-banner:focus,
+#chat-context-item-banner:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+#chat-input-wrapper {
+  transition:
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#chat-composer-focus-lamp {
+  opacity: 0;
+  transition: opacity 0.28s ease;
+  background: linear-gradient(
+    180deg,
+    rgba(225, 29, 72, 0.1) 0%,
+    rgba(225, 29, 72, 0.04) 55%,
+    transparent 100%
+  );
+}
+
+#chat-input-wrapper[data-theme="dark"] #chat-composer-focus-lamp {
+  background: linear-gradient(
+    180deg,
+    rgba(251, 113, 133, 0.14) 0%,
+    rgba(251, 113, 133, 0.05) 55%,
+    transparent 100%
+  );
+}
+
+#chat-context-item-banner,
+#chat-message-input {
+  position: relative;
+  z-index: 1;
+}
+
+#chat-context-item-badge {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#chat-context-item-title {
+  transition: color 0.22s ease;
+}
+
+#chat-input-wrapper.is-focused {
+  transform: translateY(-1px);
+  border-color: var(--composer-border-focus, #9ca3af) !important;
+  box-shadow: var(--composer-shadow-idle, 0 1px 2px rgba(0, 0, 0, 0.04)) !important;
+}
+
+#chat-input-wrapper.is-focused #chat-composer-focus-lamp {
+  opacity: 1;
+}
+
+#chat-input-wrapper.is-focused #chat-context-item-badge {
+  transform: scale(1.04);
+}
+
+#chat-input-wrapper.is-focused #chat-context-item-title {
+  color: var(--composer-context-focus, #374151);
+}
+
+#chat-input-wrapper[data-theme="dark"].is-focused #chat-context-item-title {
+  color: var(--composer-context-focus, #e5e7eb);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #chat-input-wrapper.is-focused {
+    transform: none;
+  }
+}

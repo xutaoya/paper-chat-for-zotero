@@ -5,6 +5,7 @@
 import { config } from "../../../../package.json";
 import type { ChatPanelContext, AttachmentState, SessionInfo } from "./types";
 import { createElement, copyToClipboard } from "./ChatPanelBuilder";
+import { updateContextItemBannerForItem } from "./ContextItemBanner";
 import { renderQuickActionsBar } from "./QuickActionsController";
 import { getCurrentTheme } from "./ChatPanelTheme";
 import {
@@ -2480,16 +2481,15 @@ export function updateUserBarDisplay(
 
 /**
  * Update PDF checkbox visibility (deprecated - checkbox removed)
- * PDF is now auto-detected and attached via tool calling
- * This function is kept for compatibility but does nothing
+ * PDF is now auto-detected and attached via tool calling.
+ * Also refreshes the context item banner above the composer.
  */
 export async function updatePdfCheckboxVisibilityForItem(
-  _container: HTMLElement,
-  _item: Zotero.Item | null,
-  _chatManager: { hasPdfAttachment(item: Zotero.Item): Promise<boolean> },
+  container: HTMLElement,
+  item: Zotero.Item | null,
+  chatManager: { hasPdfAttachment(item: Zotero.Item): Promise<boolean> },
 ): Promise<void> {
-  // No-op: PDF checkbox has been removed
-  // PDF is now automatically detected and attached via tool calling
+  await updateContextItemBannerForItem(container, item, chatManager);
 }
 
 /**

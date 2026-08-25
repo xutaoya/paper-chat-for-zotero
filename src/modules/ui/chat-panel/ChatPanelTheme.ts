@@ -5,6 +5,7 @@
 import type { ThemeColors } from "./types";
 import { updateHistoryDropdownSearchTheme } from "./HistoryDropdown";
 import { updateConversationNavigatorTheme } from "./ConversationNavigator";
+import { applyContextItemBannerTheme } from "./ContextItemBanner";
 
 // Light theme colors
 export const lightTheme: ThemeColors = {
@@ -24,7 +25,7 @@ export const lightTheme: ThemeColors = {
   inputBorderColor: "#d1d5db",
   inputFocusBorderColor: "#9ca3af",
   inputFocusRingColor: "rgba(17, 24, 39, 0.08)",
-  composerShadow: "0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06)",
+  composerShadow: "0 1px 2px rgba(0,0,0,0.04)",
   textPrimary: "#333",
   textSecondary: "#555",
   textMuted: "#888",
@@ -58,7 +59,7 @@ export const darkTheme: ThemeColors = {
   inputBorderColor: "#4b5563",
   inputFocusBorderColor: "#9ca3af",
   inputFocusRingColor: "rgba(243, 244, 246, 0.12)",
-  composerShadow: "0 1px 2px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.28)",
+  composerShadow: "0 1px 2px rgba(0,0,0,0.18)",
   textPrimary: "#e0e0e0",
   textSecondary: "#ccc",
   textMuted: "#999",
@@ -165,11 +166,13 @@ export function applyThemeToContainer(container: HTMLElement): void {
     toolbar.style.borderBottomColor = theme.borderColor;
   }
 
-  // PDF label
+  // PDF label (legacy)
   const pdfLabel = container.querySelector("#chat-pdf-label") as HTMLElement;
   if (pdfLabel) {
     pdfLabel.style.color = theme.textSecondary;
   }
+
+  applyContextItemBannerTheme(container, theme);
 
   // Toolbar buttons
   container
@@ -202,9 +205,20 @@ export function applyThemeToContainer(container: HTMLElement): void {
       inputArea.style.background = theme.inputAreaBg;
       inputArea.style.borderTopColor = theme.borderColor;
     }
+    const isDark = theme === darkTheme;
+    inputWrapper.dataset.theme = isDark ? "dark" : "light";
+    inputWrapper.style.setProperty("--composer-border", theme.inputBorderColor);
+    inputWrapper.style.setProperty(
+      "--composer-border-focus",
+      theme.inputFocusBorderColor,
+    );
+    inputWrapper.style.setProperty("--composer-shadow-idle", theme.composerShadow);
+    inputWrapper.style.setProperty("--composer-context-focus", theme.textPrimary);
     inputWrapper.style.background = theme.inputBg;
-    inputWrapper.style.borderColor = theme.inputBorderColor;
-    inputWrapper.style.boxShadow = theme.composerShadow;
+    if (!inputWrapper.classList.contains("is-focused")) {
+      inputWrapper.style.borderColor = theme.inputBorderColor;
+      inputWrapper.style.boxShadow = theme.composerShadow;
+    }
     inputWrapper.setAttribute(
       "data-focus-border-color",
       theme.inputFocusBorderColor,

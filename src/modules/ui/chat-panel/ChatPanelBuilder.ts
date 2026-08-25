@@ -6,6 +6,7 @@ import { config } from "../../../../package.json";
 import { getString } from "../../../utils/locale";
 import { getPref } from "../../../utils/prefs";
 import { MAX_SEARCH_QUERY_RAW_UTF16_LENGTH } from "../../chat/search/SearchQuery";
+import { createContextItemBanner } from "./ContextItemBanner";
 import type { ThemeColors } from "./types";
 import { HTML_NS } from "./types";
 
@@ -708,7 +709,8 @@ export function createChatContainer(
       boxShadow: theme.composerShadow,
       overflow: "hidden",
       flexShrink: "0",
-      transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+      transition:
+        "border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
     },
     { id: "chat-input-wrapper" },
   );
@@ -719,6 +721,37 @@ export function createChatContainer(
   inputWrapper.setAttribute("data-idle-border-color", theme.inputBorderColor);
   inputWrapper.setAttribute("data-focus-ring-color", theme.inputFocusRingColor);
   inputWrapper.setAttribute("data-idle-shadow", theme.composerShadow);
+  inputWrapper.dataset.theme =
+    theme.containerBg === "#1e1e1e" ? "dark" : "light";
+  inputWrapper.style.setProperty("--composer-border", theme.inputBorderColor);
+  inputWrapper.style.setProperty(
+    "--composer-border-focus",
+    theme.inputFocusBorderColor,
+  );
+  inputWrapper.style.setProperty("--composer-shadow-idle", theme.composerShadow);
+  inputWrapper.style.setProperty("--composer-context-focus", theme.textPrimary);
+
+  inputWrapper.style.position = "relative";
+
+  const focusLamp = createElement(
+    doc,
+    "div",
+    {
+      position: "absolute",
+      top: "0",
+      left: "0",
+      right: "0",
+      height: "52px",
+      pointerEvents: "none",
+      borderRadius: "inherit",
+      zIndex: "0",
+    },
+    { id: "chat-composer-focus-lamp", "aria-hidden": "true" },
+  );
+  inputWrapper.appendChild(focusLamp);
+
+  const contextItemBanner = createContextItemBanner(doc, theme);
+  inputWrapper.appendChild(contextItemBanner);
 
   const messageInput = createElement(
     doc,
@@ -742,30 +775,31 @@ export function createChatContainer(
     },
     {
       id: "chat-message-input",
+      class: "chat-composer-input",
       rows: "1",
       placeholder: getString("chat-input-placeholder"),
     },
   ) as HTMLTextAreaElement;
 
   const applyComposerFocus = () => {
-    const focusBorder =
-      inputWrapper.getAttribute("data-focus-border-color") ||
-      theme.inputFocusBorderColor;
-    const focusRing =
-      inputWrapper.getAttribute("data-focus-ring-color") ||
-      theme.inputFocusRingColor;
-    inputWrapper.style.borderColor = focusBorder;
-    inputWrapper.style.boxShadow = `0 0 0 3px ${focusRing}`;
+    inputWrapper.classList.add("is-focused");
   };
   const clearComposerFocus = () => {
-    inputWrapper.style.borderColor =
-      inputWrapper.getAttribute("data-idle-border-color") ||
-      theme.inputBorderColor;
-    inputWrapper.style.boxShadow =
-      inputWrapper.getAttribute("data-idle-shadow") || theme.composerShadow;
+    inputWrapper.classList.remove("is-focused");
   };
   messageInput.addEventListener("focus", applyComposerFocus);
   messageInput.addEventListener("blur", clearComposerFocus);
+  inputWrapper.addEventListener("focusin", (event) => {
+    if (event.target === messageInput) {
+      applyComposerFocus();
+    }
+  });
+  inputWrapper.addEventListener("focusout", (event) => {
+    const next = event.relatedTarget as Node | null;
+    if (!next || !inputWrapper.contains(next)) {
+      clearComposerFocus();
+    }
+  });
 
   inputWrapper.appendChild(messageInput);
 

@@ -2760,6 +2760,9 @@ function createContext(container: HTMLElement): ChatPanelContext {
     },
     setCurrentItem: (item: Zotero.Item | null) => {
       moduleCurrentItem = item;
+      if (container) {
+        void updatePdfCheckboxVisibilityForItem(container, item, manager);
+      }
     },
     getTheme: getCurrentTheme,
     getAttachmentState: () =>
