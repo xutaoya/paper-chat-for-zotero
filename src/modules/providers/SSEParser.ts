@@ -7,6 +7,11 @@
  * - Gemini: candidates[0].content.parts[0].text
  */
 
+import {
+  normalizeAnthropicStopReason,
+  normalizeOpenAIFinishReason,
+} from "./stream-stop-reason";
+
 export type SSEFormat = "openai" | "anthropic" | "gemini";
 
 // ============ 基础回调（纯文本流式） ============
@@ -174,8 +179,7 @@ function parseOpenAIToolCallingEvents(parsed: unknown): SSEToolCallingEvent[] {
   if (choice.finish_reason) {
     events.push({
       type: "done",
-      stopReason:
-        choice.finish_reason === "tool_calls" ? "tool_calls" : "end_turn",
+      stopReason: normalizeOpenAIFinishReason(choice.finish_reason),
     });
   }
 
@@ -245,7 +249,7 @@ function parseAnthropicToolCallingEvents(
       return [
         {
           type: "done",
-          stopReason: stopReason === "tool_use" ? "tool_calls" : "end_turn",
+          stopReason: normalizeAnthropicStopReason(stopReason),
         },
       ];
     }

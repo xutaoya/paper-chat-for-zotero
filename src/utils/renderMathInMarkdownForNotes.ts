@@ -1,23 +1,25 @@
 const PRESERVE_TOKEN_PREFIX = "PAPERCHAT_PRESERVE_";
 const PRESERVE_TOKEN_SUFFIX = "_END";
 
-function escapeHtml(text: string): string {
+function escapeMathHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/>/g, "&gt;");
+}
+
+function shouldUseBlockMath(latex: string): boolean {
+  return latex.includes("\n") || /\\tag\b/.test(latex);
 }
 
 /** Zotero note-editor math_inline serialization. */
 function zoteroInlineMathHtml(latex: string): string {
-  return `<span class="math">$${escapeHtml(latex)}$</span>`;
+  return `<span class="math">$${escapeMathHtml(latex)}$</span>`;
 }
 
 /** Zotero note-editor math_display serialization. */
 function zoteroBlockMathHtml(latex: string): string {
-  return `<pre class="math">$$${escapeHtml(latex)}$$</pre>`;
+  return `<pre class="math">$$${escapeMathHtml(latex)}$$</pre>`;
 }
 
 export function renderMathInMarkdownForNotes(
@@ -53,9 +55,8 @@ export function renderMathInMarkdownForNotes(
     if (!trimmed) {
       return match;
     }
-    // Single-line display math → inline node to avoid block-level gaps between
-    // consecutive equations (Zotero pre.math carries large paragraph spacing).
-    if (!trimmed.includes("\n")) {
+    // Single-line display math without \tag → inline node to reduce block gaps.
+    if (!shouldUseBlockMath(trimmed)) {
       return preserve(zoteroInlineMathHtml(trimmed));
     }
     return preserve(zoteroBlockMathHtml(trimmed));
@@ -65,6 +66,9 @@ export function renderMathInMarkdownForNotes(
     const trimmed = (math as string).trim();
     if (!trimmed) {
       return match;
+    }
+    if (shouldUseBlockMath(trimmed)) {
+      return preserve(zoteroBlockMathHtml(trimmed));
     }
     return preserve(zoteroInlineMathHtml(trimmed));
   });

@@ -694,9 +694,13 @@
   }
 }
 
-@keyframes paperchat-thinking-spin {
-  to {
-    transform: rotate(360deg);
+@keyframes paperchat-thinking-flash {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
   }
 }
 

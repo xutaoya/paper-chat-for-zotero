@@ -291,4 +291,29 @@ describe("SSEParser", function () {
       { type: "done", stopReason: "tool_calls" },
     ]);
   });
+
+  it("maps OpenAI length finish_reason to max_tokens", async function () {
+    const events: SSEToolCallingEvent[] = [];
+    const sse = [
+      `data: ${JSON.stringify({
+        choices: [
+          {
+            index: 0,
+            delta: { content: "partial answer" },
+            finish_reason: "length",
+          },
+        ],
+      })}\n\n`,
+      "data: [DONE]\n\n",
+    ];
+
+    await parseSSEStreamWithToolCalling(readerFromSSE(sse), "openai", {
+      onEvent: (event) => events.push(event),
+    });
+
+    assert.deepEqual(events, [
+      { type: "text_delta", text: "partial answer" },
+      { type: "done", stopReason: "max_tokens" },
+    ]);
+  });
 });

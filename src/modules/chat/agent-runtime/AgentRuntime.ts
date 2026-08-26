@@ -284,6 +284,9 @@ function rewriteToolCallItemKey(
 const MAX_ITERATIONS_ERROR = "Maximum tool-calling iterations reached.";
 const MAX_PRESENTATION_RECOVERY_EXTENSIONS = 2;
 const MAX_PRESENTATION_RECOVERY_NUDGES = 2;
+const MAX_OUTPUT_TRUNCATION_CONTINUATIONS = 3;
+const OUTPUT_TRUNCATION_CONTINUATION_USER_MESSAGE =
+  "Continue your previous answer from exactly where you stopped. Do not repeat content you already provided.";
 const AGENT_TRACE_LOG_PREF =
   "extensions.zotero.paperchat.devEnableAgentTraceLogs";
 
@@ -705,6 +708,30 @@ export class AgentRuntime {
           return;
         }
 
+        const continuedOutput = await this.continueTruncatedOutputRound({
+          logPrefix,
+          displayBeforeRound: accumulatedDisplay,
+          initialResult: result,
+          initialHostedWebSearchDisplay: hostedWebSearchDisplay,
+          currentMessages,
+          sendingSession,
+          requestNext: (continuationDisplayBase) =>
+            this.runStreamingRound(
+              provider,
+              currentMessages,
+              iterationControl.toolsForRound,
+              sendingSession,
+              sessionRunId,
+              abortSignal,
+              assistantMessage,
+              continuationDisplayBase,
+              iteration,
+              iterationControl.toolChoice,
+              executeProviderRequest,
+              refreshRoundToolsAfterProviderChange,
+            ),
+        });
+
         await this.finalizeCompletedTurn({
           sendingSession,
           sessionRunId,
@@ -712,10 +739,7 @@ export class AgentRuntime {
           assistantMessage,
           pdfWasAttached,
           summaryTriggered,
-          accumulatedDisplay:
-            accumulatedDisplay +
-            hostedWebSearchDisplay +
-            (result.content || ""),
+          accumulatedDisplay: continuedOutput.accumulatedDisplay,
           iteration,
         });
         return;
@@ -1027,6 +1051,37 @@ export class AgentRuntime {
           return;
         }
 
+        const continuedOutput = await this.continueTruncatedOutputRound({
+          logPrefix,
+          displayBeforeRound: accumulatedDisplay,
+          initialResult: result,
+          initialHostedWebSearchDisplay: hostedWebSearchDisplay,
+          currentMessages,
+          sendingSession,
+          requestNext: () =>
+            executeProviderRequest(
+              () =>
+                provider.chatCompletionWithTools(
+                  currentMessages,
+                  iterationControl.toolsForRound,
+                  abortSignal,
+                  {
+                    toolChoice: iterationControl.toolChoice,
+                  },
+                ),
+              () =>
+                this.refreshIterationToolsForProvider(
+                  iterationControl,
+                  iteration,
+                  tools,
+                  maxIterations,
+                  sendingSession,
+                  budgetLimits,
+                  provider.supportsHostedWebSearch?.() === true,
+                ),
+            ),
+        });
+
         await this.finalizeCompletedTurn({
           sendingSession,
           sessionRunId,
@@ -1034,10 +1089,7 @@ export class AgentRuntime {
           assistantMessage,
           pdfWasAttached,
           summaryTriggered,
-          accumulatedDisplay:
-            accumulatedDisplay +
-            hostedWebSearchDisplay +
-            (result.content || ""),
+          accumulatedDisplay: continuedOutput.accumulatedDisplay,
           iteration,
         });
         return;
@@ -2739,6 +2791,86 @@ export class AgentRuntime {
         { allowWhenInvalidated: true },
       );
     }
+  }
+
+  private shouldContinueTruncatedOutput(result: {
+    stopReason?: string;
+    toolCalls?: ToolCall[];
+    content?: string;
+  }): boolean {
+    return (
+      result.stopReason === "max_tokens" &&
+      !(result.toolCalls?.length) &&
+      Boolean((result.content || "").trim())
+    );
+  }
+
+  private pushOutputContinuationMessages(
+    currentMessages: ChatMessage[],
+    partialContent: string,
+  ): void {
+    currentMessages.push({
+      id: this.callbacks.generateId(),
+      role: "assistant",
+      content: partialContent,
+      timestamp: Date.now(),
+    });
+    currentMessages.push({
+      id: this.callbacks.generateId(),
+      role: "user",
+      content: OUTPUT_TRUNCATION_CONTINUATION_USER_MESSAGE,
+      apiOnly: true,
+      timestamp: Date.now(),
+    });
+  }
+
+  private async continueTruncatedOutputRound<
+    T extends {
+      content?: string;
+      toolCalls?: ToolCall[];
+      hostedWebSearches?: HostedWebSearchCall[];
+      stopReason?: string;
+    },
+  >(params: {
+    logPrefix: string;
+    displayBeforeRound: string;
+    initialResult: T;
+    initialHostedWebSearchDisplay: string;
+    currentMessages: ChatMessage[];
+    sendingSession: ChatSession;
+    requestNext: (continuationDisplayBase: string) => Promise<T>;
+  }): Promise<{ result: T; accumulatedDisplay: string }> {
+    let result = params.initialResult;
+    let hostedWebSearchDisplay = params.initialHostedWebSearchDisplay;
+    let workingBase = params.displayBeforeRound;
+    let continuations = 0;
+
+    while (
+      this.shouldContinueTruncatedOutput(result) &&
+      continuations < MAX_OUTPUT_TRUNCATION_CONTINUATIONS
+    ) {
+      continuations += 1;
+      const partial = result.content || "";
+      workingBase += hostedWebSearchDisplay + partial;
+      this.pushOutputContinuationMessages(params.currentMessages, partial);
+      ztoolkit.log(
+        `[${params.logPrefix}] Output hit max_tokens; auto-continuing (${continuations}/${MAX_OUTPUT_TRUNCATION_CONTINUATIONS})`,
+      );
+      result = await params.requestNext(workingBase);
+      this.upsertHostedWebSearchResults(
+        params.sendingSession,
+        result.hostedWebSearches || [],
+      );
+      hostedWebSearchDisplay = this.formatHostedWebSearchDisplay(
+        result.hostedWebSearches || [],
+      );
+    }
+
+    return {
+      result,
+      accumulatedDisplay:
+        workingBase + hostedWebSearchDisplay + (result.content || ""),
+    };
   }
 
   private async finalizeCompletedTurn(params: {

@@ -39,27 +39,36 @@ export function withLeadingNoteHeading(html: string, title: string): string {
   return trimmed ? `${heading}\n${trimmed}` : heading;
 }
 
-export function compactMathLineSpacing(markdown: string): string {
-  const isMathLine = (line: string) =>
-    /^\s*(\$\$[\s\S]+\$\$|\$[^$\n]+\$)/.test(line);
+function isMathOnlyLine(line: string): boolean {
+  return /^\s*(\$\$[\s\S]+\$\$|\$[^$\n]+\$)\s*$/.test(line);
+}
+
+export function separateMathParagraphs(markdown: string): string {
   const lines = markdown.split("\n");
   const result: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const previous = lines[index - 1];
     if (
-      line.trim() === "" &&
-      isMathLine(lines[i + 1] ?? "") &&
-      isMathLine(lines[i - 1] ?? "")
+      index > 0 &&
+      isMathOnlyLine(previous) &&
+      isMathOnlyLine(line) &&
+      result[result.length - 1]?.trim() !== ""
     ) {
-      continue;
+      result.push("");
     }
     result.push(line);
   }
   return result.join("\n");
 }
 
+/** @deprecated Use separateMathParagraphs instead. */
+export function compactMathLineSpacing(markdown: string): string {
+  return separateMathParagraphs(markdown);
+}
+
 export function markdownToNoteHtml(markdown: string): string {
-  const trimmed = compactMathLineSpacing(markdown.trim());
+  const trimmed = separateMathParagraphs(markdown.trim());
   if (!trimmed) {
     return "";
   }

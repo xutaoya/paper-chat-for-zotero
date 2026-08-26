@@ -21,6 +21,7 @@ import type {
 } from "../../types/provider";
 import type { ToolDefinition, ToolCall } from "../../types/tool";
 import { parseSSEStreamWithToolCalling } from "./SSEParser";
+import { normalizeAnthropicStopReason } from "./stream-stop-reason";
 
 export class AnthropicProvider extends BaseProvider {
   supportsPdfUpload(): boolean {
@@ -284,7 +285,11 @@ export class AnthropicProvider extends BaseProvider {
     tools?: ToolDefinition[],
     signal?: AbortSignal,
     options?: ToolCallingOptions,
-  ): Promise<{ content: string; toolCalls?: ToolCall[] }> {
+  ): Promise<{
+    content: string;
+    toolCalls?: ToolCall[];
+    stopReason?: "tool_calls" | "end_turn" | "max_tokens" | "stop";
+  }> {
     if (!this.isReady()) {
       throw new Error("Provider is not configured");
     }
@@ -365,6 +370,7 @@ export class AnthropicProvider extends BaseProvider {
     return {
       content: textContent,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      stopReason: normalizeAnthropicStopReason(data.stop_reason),
     };
   }
 

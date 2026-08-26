@@ -4,6 +4,7 @@ import {
   type ManagedAbortController,
 } from "../../../utils/abort";
 import { getNextQuestionHintService } from "../../chat/next-question-hint";
+import { syncComposerHintOffset } from "./ContextItemBanner";
 import type { ChatMessage } from "../../../types/chat";
 import type {
   NextQuestionHint,
@@ -33,12 +34,9 @@ export class NextQuestionHintController {
   private disposed = false;
 
   private readonly onKeyDown = (event: KeyboardEvent) => {
-    if (!this.hint || this.isComposing) {
-      return;
-    }
-
-    if (event.key === "Escape") {
+    if (event.key === "Escape" && this.hint) {
       event.preventDefault();
+      event.stopPropagation();
       this.dismissHint();
       return;
     }
@@ -47,11 +45,12 @@ export class NextQuestionHintController {
       return;
     }
 
-    if (!this.input || this.input.value.trim()) {
+    if (!this.isHintActive()) {
       return;
     }
 
     event.preventDefault();
+    event.stopImmediatePropagation();
     this.acceptHint();
   };
 
@@ -104,6 +103,7 @@ export class NextQuestionHintController {
       "[data-next-question-hint-action]",
     ) as HTMLElement | null;
     this.wrapper.appendChild(this.hintLayer);
+    syncComposerHintOffset(this.context.container);
     this.bindEvents();
   }
 
@@ -241,7 +241,7 @@ export class NextQuestionHintController {
     this.generationController?.abort();
     this.generationController = null;
     this.generationAssistantMessageId = null;
-    this.input?.removeEventListener("keydown", this.onKeyDown);
+    this.input?.removeEventListener("keydown", this.onKeyDown, true);
     this.input?.removeEventListener("input", this.onInput);
     this.input?.removeEventListener("paste", this.onPaste);
     this.input?.removeEventListener(
@@ -253,6 +253,19 @@ export class NextQuestionHintController {
     this.restorePlaceholder();
     this.hintLayer?.remove();
     this.hint = null;
+  }
+
+  private isHintActive(): boolean {
+    if (this.disposed || this.isComposing || !this.hint || !this.input) {
+      return false;
+    }
+    if (this.hint.expiresAt <= Date.now()) {
+      return false;
+    }
+    if (this.isMentionPopupVisible()) {
+      return false;
+    }
+    return this.hintLayer?.style.display === "flex";
   }
 
   private isReady(): boolean {
@@ -267,7 +280,7 @@ export class NextQuestionHintController {
   }
 
   private bindEvents(): void {
-    this.input?.addEventListener("keydown", this.onKeyDown);
+    this.input?.addEventListener("keydown", this.onKeyDown, true);
     this.input?.addEventListener("input", this.onInput);
     this.input?.addEventListener("paste", this.onPaste);
     this.input?.addEventListener("compositionstart", this.onCompositionStart);
@@ -293,6 +306,7 @@ export class NextQuestionHintController {
     this.service.markAccepted(accepted);
     this.clearHint();
     this.input.value = accepted.text;
+    this.input.focus();
     this.input.setSelectionRange(accepted.text.length, accepted.text.length);
     this.input.dispatchEvent(new Event("input", { bubbles: true }));
   }
@@ -328,6 +342,9 @@ export class NextQuestionHintController {
       !this.input?.value &&
       !this.isMentionPopupVisible();
     this.hintLayer.style.display = visible ? "flex" : "none";
+    if (visible) {
+      syncComposerHintOffset(this.context.container);
+    }
     this.syncNativePlaceholder(visible);
   }
 
@@ -358,7 +375,7 @@ export class NextQuestionHintController {
       position: "absolute",
       left: "14px",
       right: "12px",
-      top: "12px",
+      top: "var(--chat-composer-hint-top, 12px)",
       height: "18px",
       alignItems: "center",
       gap: "8px",

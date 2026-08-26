@@ -1145,7 +1145,7 @@ function createReasoningContainer(
     height: "14px",
     opacity: isStreaming ? "0.85" : "0.65",
     flexShrink: "0",
-    animation: isStreaming ? "paperchat-thinking-spin 2.4s linear infinite" : "",
+    animation: isStreaming ? "paperchat-thinking-flash 1.2s ease-in-out infinite" : "",
   });
 
   const label = createElement(doc, "span", {});

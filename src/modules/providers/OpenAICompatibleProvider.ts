@@ -21,6 +21,7 @@ import {
   stablePromptCacheStringify,
 } from "./prompt-cache-diagnostics";
 import { applyReasoningRequestOptions } from "./reasoning-request";
+import { normalizeOpenAIFinishReason } from "./stream-stop-reason";
 
 const EXTRA_REQUEST_BODY_PROTECTED_KEYS = new Set([
   "model",
@@ -538,6 +539,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
     reasoning?: string;
     toolCalls?: ToolCall[];
     suppressedToolCall?: boolean;
+    stopReason?: "tool_calls" | "end_turn" | "max_tokens" | "stop";
   }> {
     if (!this.isReady()) {
       throw new Error("Provider is not configured");
@@ -655,6 +657,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           reasoning: message?.reasoning_content || undefined,
           toolCalls: allowDsmlToolCalls ? xmlToolCalls : undefined,
           suppressedToolCall: !allowDsmlToolCalls,
+          stopReason: normalizeOpenAIFinishReason(finishReason),
         };
       }
     }
@@ -677,6 +680,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           structuredToolCalls && structuredToolCalls.length > 0
             ? structuredToolCalls
             : dsmlFallback.toolCalls,
+        stopReason: normalizeOpenAIFinishReason(finishReason),
       };
     }
 
@@ -687,6 +691,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       suppressedToolCall:
         dsmlFallback.suppressedToolCall ||
         (!allowDsmlToolCalls && !!structuredToolCalls?.length),
+      stopReason: normalizeOpenAIFinishReason(finishReason),
     };
   }
 

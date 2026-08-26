@@ -66,6 +66,29 @@ function syncComposerInputPadding(container: HTMLElement, visible: boolean): voi
   input.style.paddingTop = visible ? "8px" : "14px";
 }
 
+export function syncComposerHintOffset(container: HTMLElement): void {
+  const wrapper = container.querySelector(
+    "#chat-input-wrapper",
+  ) as HTMLElement | null;
+  const banner = container.querySelector(
+    `#${BANNER_ID}`,
+  ) as HTMLElement | null;
+  if (!wrapper) {
+    return;
+  }
+
+  const bannerVisible =
+    !!banner &&
+    banner.style.display !== "none" &&
+    banner.offsetHeight > 0;
+  const inputPaddingTop = bannerVisible ? 8 : 14;
+  const top = bannerVisible && banner
+    ? banner.offsetHeight + inputPaddingTop
+    : inputPaddingTop;
+
+  wrapper.style.setProperty("--chat-composer-hint-top", `${top}px`);
+}
+
 export function createContextItemBanner(
   doc: Document,
   theme: ThemeColors,
@@ -76,8 +99,9 @@ export function createContextItemBanner(
     {
       display: "none",
       alignItems: "center",
+      flexShrink: "0",
       gap: "8px",
-      padding: "10px 14px 0",
+      padding: "6px 14px 2px",
       background: "transparent",
       cursor: "pointer",
       boxSizing: "border-box",
@@ -184,6 +208,7 @@ export async function updateContextItemBannerForItem(
     banner.removeAttribute("data-item-id");
     banner.onclick = null;
     syncComposerInputPadding(container, false);
+    syncComposerHintOffset(container);
     return;
   }
 
@@ -201,6 +226,7 @@ export async function updateContextItemBannerForItem(
 
   banner.style.display = "flex";
   syncComposerInputPadding(container, true);
+  syncComposerHintOffset(container);
   banner.setAttribute("data-item-id", String(contextItem.id));
   banner.setAttribute(
     "aria-label",

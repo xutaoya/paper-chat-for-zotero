@@ -300,6 +300,7 @@ export interface ToolCallingProvider extends AIProvider {
     hostedWebSearches?: HostedWebSearchCall[];
     /** Provider returned tool protocol even though this round disabled tools. */
     suppressedToolCall?: boolean;
+    stopReason?: "tool_calls" | "end_turn" | "max_tokens" | "stop";
   }>;
 
   /** 流式 tool calling（可选，部分 provider 可能不支持） */

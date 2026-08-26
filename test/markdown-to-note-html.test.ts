@@ -46,32 +46,41 @@ describe("markdownToNoteHtml", function () {
     assert.notMatch(html, /<p>[\s\S]*<pre class="math">/);
   });
 
-  it("keeps consecutive numbered equations in one paragraph", function () {
+  it("preserves apostrophes inside inline math for Zotero", function () {
+    const html = markdownToNoteHtml("$h'(t) = Ah(t) + Bx(t)$");
+    assert.include(html, "$h'(t) = Ah(t) + Bx(t)$");
+    assert.notInclude(html, "&#39;");
+  });
+
+  it("uses block math for numbered equations with \\tag", function () {
+    const html = markdownToNoteHtml(
+      "$h'(t) = Ah(t) + Bx(t), \\tag{1}$\n\n$y(t) = Ch(t), \\tag{2}$",
+    );
+    assert.include(html, '<pre class="math">$$h\'(t) = Ah(t) + Bx(t), \\tag{1}$$</pre>');
+    assert.include(html, '<pre class="math">$$y(t) = Ch(t), \\tag{2}$$</pre>');
+    assert.notMatch(html, /<p>[\s\S]*<pre class="math">[\s\S]*<br/);
+  });
+
+  it("puts consecutive numbered equations in separate paragraphs", function () {
     const html = markdownToNoteHtml(
       "$h'(t) = Ah(t) + Bx(t) \\quad \\text{(Eq. 1)}$\n\n$y(t) = Ch(t) \\quad \\text{(Eq. 2)}$",
     );
     assert.match(
       html,
-      /<p>[\s\S]*<span class="math">[\s\S]*\(Eq\. 1\)[\s\S]*<br[\s\S]*<span class="math">[\s\S]*\(Eq\. 2\)[\s\S]*<\/p>/,
+      /<p>[\s\S]*\(Eq\. 1\)[\s\S]*<\/p>\s*<p>[\s\S]*\(Eq\. 2\)[\s\S]*<\/p>/,
     );
-    assert.notMatch(
-      html,
-      /<p>[\s\S]*\(Eq\. 1\)[\s\S]*<\/p>\s*<p>[\s\S]*\(Eq\. 2\)/,
-    );
+    assert.notMatch(html, /<br\s*\/?>/);
   });
 
-  it("keeps consecutive inline formula lines in one paragraph", function () {
+  it("puts consecutive inline formula lines in separate paragraphs", function () {
     const html = markdownToNoteHtml(
       "intro\n\n$h_t = x_t$\n\n$y_t = z_t$\n\noutro",
     );
     assert.match(
       html,
-      /<p>intro<\/p>\s*<p>[\s\S]*<span class="math">[\s\S]*<br[\s\S]*<span class="math">[\s\S]*<\/p>\s*<p>outro<\/p>/,
+      /<p>intro<\/p>\s*<p>[\s\S]*<span class="math">[\s\S]*<\/p>\s*<p>[\s\S]*<span class="math">[\s\S]*<\/p>\s*<p>outro<\/p>/,
     );
-    assert.notMatch(
-      html,
-      /<p>[\s\S]*<span class="math">[\s\S]*<\/p>\s*<p>[\s\S]*<span class="math">/,
-    );
+    assert.notMatch(html, /<br\s*\/?>/);
   });
 
   it("preserves blackboard bold and membership symbols in inline math", function () {
