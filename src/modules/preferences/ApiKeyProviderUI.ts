@@ -7,6 +7,7 @@ import { prefColors } from "../../utils/colors";
 import { getProviderManager } from "../providers";
 import type { ApiKeyProviderConfig } from "../../types/provider";
 import { clearElement, showTestResult } from "./utils";
+import { testModelSpeed } from "./ModelSpeedTest";
 
 type ProviderMetadata = ReturnType<
   typeof getProviderManager
@@ -264,6 +265,71 @@ export function populateModelList(
 
     item.appendChild(infoContainer);
 
+    const actions = doc.createElementNS(
+      "http://www.w3.org/1999/xhtml",
+      "div",
+    ) as HTMLDivElement;
+    actions.style.cssText =
+      "display: flex; align-items: center; gap: 8px; flex-shrink: 0;";
+
+    const speedResult = doc.createElementNS(
+      "http://www.w3.org/1999/xhtml",
+      "span",
+    ) as HTMLSpanElement;
+    speedResult.className = "pref-model-speed-result";
+    speedResult.style.cssText = "font-size: 11px; color: #666; min-width: 48px;";
+
+    const speedBtn = doc.createElementNS(
+      "http://www.w3.org/1999/xhtml",
+      "button",
+    ) as HTMLButtonElement;
+    speedBtn.type = "button";
+    speedBtn.textContent = getString("pref-model-speed-test");
+    speedBtn.style.cssText = `
+      border: 1px solid var(--color-border, #ddd);
+      background: #fff;
+      color: #333;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      line-height: 1.4;
+    `;
+    speedBtn.addEventListener("click", async () => {
+      saveCurrentProviderConfig(doc, config.id);
+      const latestConfig = providerManager.getProviderConfig(
+        config.id,
+      ) as ApiKeyProviderConfig | null;
+      if (!latestConfig) {
+        return;
+      }
+
+      speedBtn.disabled = true;
+      speedResult.style.color = "#666";
+      speedResult.textContent = getString("pref-model-speed-testing");
+      try {
+        const result = await testModelSpeed(latestConfig, modelId);
+        if (result.success) {
+          speedResult.style.color = "#2e7d32";
+          speedResult.textContent = getString("pref-model-speed-result", {
+            args: { latency: result.latencyMs },
+          });
+        } else {
+          speedResult.style.color = "#c62828";
+          speedResult.title = result.error || "";
+          speedResult.textContent = getString("pref-model-speed-failed");
+        }
+      } catch (error) {
+        speedResult.style.color = "#c62828";
+        speedResult.title = error instanceof Error ? error.message : String(error);
+        speedResult.textContent = getString("pref-model-speed-failed");
+      } finally {
+        speedBtn.disabled = false;
+      }
+    });
+    actions.appendChild(speedResult);
+    actions.appendChild(speedBtn);
+
     // Delete button for custom models
     if (isCustom) {
       const deleteBtn = doc.createElementNS(
@@ -291,9 +357,10 @@ export function populateModelList(
           }
         }
       });
-      item.appendChild(deleteBtn);
+      actions.appendChild(deleteBtn);
     }
 
+    item.appendChild(actions);
     listContainer.appendChild(item);
   });
 

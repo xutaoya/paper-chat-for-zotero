@@ -108,6 +108,11 @@ pref-model-list = Model List
 pref-add-model = + Add Model
 pref-enter-model-id = Enter model ID:
 pref-model-custom = Custom
+pref-model-speed-test = Speed
+pref-model-speed-testing = Testing...
+pref-model-speed-failed = Failed
+pref-model-speed-result = { $latency }ms
+pref-model-speed-unsupported = Speed test is not supported for this provider
 pref-model-exists = Model already exists
 
 # PDF Settings

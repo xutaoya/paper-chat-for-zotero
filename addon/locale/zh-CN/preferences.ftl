@@ -108,6 +108,11 @@ pref-model-list = 模型列表
 pref-add-model = + 添加模型
 pref-enter-model-id = 请输入模型ID:
 pref-model-custom = 自定义
+pref-model-speed-test = 测速
+pref-model-speed-testing = 测试中...
+pref-model-speed-failed = 失败
+pref-model-speed-result = { $latency }ms
+pref-model-speed-unsupported = 此服务商不支持测速
 pref-model-exists = 该模型已存在
 
 # PDF Settings
