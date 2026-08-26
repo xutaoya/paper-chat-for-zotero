@@ -38,7 +38,7 @@ export function createChatEmptyStateIcon(doc: Document): HTMLElement {
       opacity: "0.6",
     },
     {
-      src: `chrome://${config.addonRef}/content/icons/chat-start.svg`,
+      src: `chrome://${config.addonRef}/content/icons/favicon.svg`,
       alt: "",
     },
   );

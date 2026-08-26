@@ -1,4 +1,4 @@
-# AI 论文对话 (xutao)
+<h1><img src="addon/content/icons/favicon.svg" width="32" height="32" alt="" style="vertical-align: middle;"> AI 论文对话 (xutao)</h1>
 
 基于 [syt2/paper-chat-for-zotero](https://github.com/syt2/paper-chat-for-zotero) 的个人二创 fork。上游是完整的 Zotero AI 论文助手；本仓库只保留我日常读文献真正用到的部分，并做了少量改动。与上游插件 ID 不同，可与原版并存安装。
 

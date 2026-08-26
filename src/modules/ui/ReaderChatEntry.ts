@@ -83,7 +83,7 @@ function buildSelectionPopupButton(
   button.setAttribute("aria-label", getString("chat-reader-ask-tooltip"));
 
   const icon = doc.createElement("img");
-  icon.src = `chrome://${config.addonRef}/content/icons/chat-start.svg`;
+  icon.src = `chrome://${config.addonRef}/content/icons/favicon.svg`;
   icon.alt = "";
   icon.setAttribute("aria-hidden", "true");
 
