@@ -2,6 +2,12 @@ import {
   buildMineruCacheKey,
   type MineruCacheListItem,
 } from "../chat/MinerUCacheService";
+import {
+  getCollectionChildItems,
+  getParentItem,
+  getZoteroItem,
+  isZoteroItemAlive,
+} from "../../utils/zoteroItems";
 
 export type MineruLibraryRowStatus =
   | MineruCacheListItem["runtimeStatus"]
@@ -99,16 +105,23 @@ export function formatZoteroDate(value: string | number | undefined): string {
 }
 
 export function getPdfAttachment(item: Zotero.Item): Zotero.Item | null {
-  if (item.isAttachment?.() && item.isPDFAttachment?.()) {
-    return item;
+  if (!isZoteroItemAlive(item)) {
+    return null;
   }
-  if (!item.isAttachment?.()) {
-    for (const attachmentID of item.getAttachments()) {
-      const attachment = Zotero.Items.get(attachmentID);
-      if (attachment?.isPDFAttachment?.()) {
-        return attachment;
+  try {
+    if (item.isAttachment?.() && item.isPDFAttachment?.()) {
+      return item;
+    }
+    if (!item.isAttachment?.()) {
+      for (const attachmentID of item.getAttachments()) {
+        const attachment = getZoteroItem(attachmentID);
+        if (attachment?.isPDFAttachment?.()) {
+          return attachment;
+        }
       }
     }
+  } catch {
+    return null;
   }
   return null;
 }
@@ -125,7 +138,7 @@ function resolveTitle(attachment: Zotero.Item, parent: Zotero.Item | null): stri
 
 function countPdfsInCollection(collection: Zotero.Collection): number {
   let count = 0;
-  for (const item of collection.getChildItems()) {
+  for (const item of getCollectionChildItems(collection)) {
     if (getPdfAttachment(item)) {
       count += 1;
     }
@@ -161,11 +174,21 @@ export async function listAllPdfAttachments(
   const search = new Zotero.Search({ libraryID });
   search.addCondition("itemType", "is", "attachment");
   const ids = await search.search();
+  if (!ids.length) {
+    return [];
+  }
+  const items = await Zotero.Items.getAsync(ids);
   const attachments: Zotero.Item[] = [];
-  for (const id of ids) {
-    const attachment = Zotero.Items.get(id);
-    if (attachment?.isPDFAttachment?.()) {
-      attachments.push(attachment);
+  for (const item of items) {
+    if (!isZoteroItemAlive(item)) {
+      continue;
+    }
+    try {
+      if (item.isPDFAttachment?.()) {
+        attachments.push(item);
+      }
+    } catch {
+      continue;
     }
   }
   return attachments;
@@ -175,7 +198,7 @@ export function listPdfAttachmentsInCollection(
   collection: Zotero.Collection,
 ): Zotero.Item[] {
   const attachments: Zotero.Item[] = [];
-  for (const item of collection.getChildItems()) {
+  for (const item of getCollectionChildItems(collection)) {
     const pdf = getPdfAttachment(item);
     if (pdf) {
       attachments.push(pdf);
@@ -203,9 +226,10 @@ export function buildTagSummary(pdfAttachments: readonly Zotero.Item[]): MineruT
   let tagged = 0;
   let untagged = 0;
   for (const attachment of pdfAttachments) {
-    const parent = attachment.parentItemID
-      ? Zotero.Items.get(attachment.parentItemID)
-      : null;
+    if (!isZoteroItemAlive(attachment)) {
+      continue;
+    }
+    const parent = getParentItem(attachment);
     const tagNames = (parent?.getTags?.() || [])
       .map((tag) => String(tag.tag || "").trim())
       .filter(Boolean);
@@ -247,53 +271,59 @@ export function buildLibraryRows(
 
   const rows: MineruLibraryRow[] = [];
   for (const attachment of pdfAttachments) {
-    const parent = attachment.parentItemID
-      ? Zotero.Items.get(attachment.parentItemID)
-      : null;
-    const tags = (parent?.getTags?.() || [])
-      .map((tag) => String(tag.tag || "").trim())
-      .filter(Boolean);
-    if (activeTag && !tags.includes(activeTag)) {
+    if (!isZoteroItemAlive(attachment)) {
       continue;
     }
+    try {
+      const parent = getParentItem(attachment);
+      const tags = (parent?.getTags?.() || [])
+        .map((tag) => String(tag.tag || "").trim())
+        .filter(Boolean);
+      if (activeTag && !tags.includes(activeTag)) {
+        continue;
+      }
 
-    const title = resolveTitle(attachment, parent);
-    const creators = formatCreatorLabel(parent);
-    const year = formatItemYear(parent);
-    const dateAdded = formatZoteroDate(
-      parent?.dateAdded || attachment.dateAdded,
-    );
-    const cacheKey = buildMineruCacheKey(
-      attachment.libraryID,
-      attachment.key,
-    );
-    const cached = cacheByKey.get(cacheKey);
-    const runtimeStatus: MineruLibraryRowStatus =
-      cached?.runtimeStatus || "uncached";
+      const title = resolveTitle(attachment, parent);
+      const creators = formatCreatorLabel(parent);
+      const year = formatItemYear(parent);
+      const dateAdded = formatZoteroDate(
+        parent?.dateAdded || attachment.dateAdded,
+      );
+      const cacheKey = buildMineruCacheKey(
+        attachment.libraryID,
+        attachment.key,
+      );
+      const cached = cacheByKey.get(cacheKey);
+      const runtimeStatus: MineruLibraryRowStatus =
+        cached?.runtimeStatus || "uncached";
+      const fileName = attachment.attachmentFilename || "document.pdf";
 
-    if (
-      query &&
-      !title.toLowerCase().includes(query) &&
-      !creators.toLowerCase().includes(query) &&
-      !attachment.attachmentFilename.toLowerCase().includes(query)
-    ) {
+      if (
+        query &&
+        !title.toLowerCase().includes(query) &&
+        !creators.toLowerCase().includes(query) &&
+        !fileName.toLowerCase().includes(query)
+      ) {
+        continue;
+      }
+
+      rows.push({
+        cacheKey,
+        attachmentKey: attachment.key,
+        libraryID: attachment.libraryID,
+        title,
+        fileName,
+        creators,
+        year,
+        dateAdded,
+        runtimeStatus,
+        errorMessage: cached?.errorMessage,
+        parsedAt: cached?.parsedAt,
+        tags,
+      });
+    } catch {
       continue;
     }
-
-    rows.push({
-      cacheKey,
-      attachmentKey: attachment.key,
-      libraryID: attachment.libraryID,
-      title,
-      fileName: attachment.attachmentFilename || "document.pdf",
-      creators,
-      year,
-      dateAdded,
-      runtimeStatus,
-      errorMessage: cached?.errorMessage,
-      parsedAt: cached?.parsedAt,
-      tags,
-    });
   }
 
   return rows.sort((left, right) => right.dateAdded.localeCompare(left.dateAdded));

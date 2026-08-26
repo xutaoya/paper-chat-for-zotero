@@ -1,4 +1,9 @@
 import { getDataPath } from "../../utils/common";
+import {
+  getParentItem,
+  getZoteroItemByKey,
+  isZoteroItemAlive,
+} from "../../utils/zoteroItems";
 import { extractMineruZipToDirectory } from "./MinerUZipArchive";
 
 const CACHE_ROOT = "mineru-cache";
@@ -131,26 +136,30 @@ class MinerUCacheService {
   private async getAttachmentFingerprint(
     attachment: Zotero.Item,
   ): Promise<{ fileSize: number; fileMtime: number } | null> {
-    const path = await attachment.getFilePathAsync();
-    if (!path || !(await IOUtils.exists(path))) {
+    if (!isZoteroItemAlive(attachment)) {
       return null;
     }
-    const stat = await IOUtils.stat(path);
-    return {
-      fileSize: Number(stat.size || 0),
-      fileMtime: Number(stat.lastModified || 0),
-    };
+    try {
+      const path = await attachment.getFilePathAsync();
+      if (!path || !(await IOUtils.exists(path))) {
+        return null;
+      }
+      const stat = await IOUtils.stat(path);
+      return {
+        fileSize: Number(stat.size || 0),
+        fileMtime: Number(stat.lastModified || 0),
+      };
+    } catch {
+      return null;
+    }
   }
 
   private resolveTitle(attachment: Zotero.Item): string {
-    const parentID = attachment.parentItemID;
-    if (parentID) {
-      const parent = Zotero.Items.get(parentID);
-      if (parent) {
-        const title = String(parent.getField("title") || "").trim();
-        if (title) {
-          return title;
-        }
+    const parent = getParentItem(attachment);
+    if (parent) {
+      const title = String(parent.getField("title") || "").trim();
+      if (title) {
+        return title;
       }
     }
     return attachment.attachmentFilename || attachment.getDisplayTitle();
@@ -205,9 +214,7 @@ class MinerUCacheService {
     }
 
     const index = await this.loadIndex();
-    const parent = attachment.parentItemID
-      ? Zotero.Items.get(attachment.parentItemID)
-      : null;
+    const parent = getParentItem(attachment);
 
     index[cacheKey] = {
       cacheKey,
@@ -239,9 +246,7 @@ class MinerUCacheService {
 
     const cacheKey = buildMineruCacheKey(attachment.libraryID, attachment.key);
     const index = await this.loadIndex();
-    const parent = attachment.parentItemID
-      ? Zotero.Items.get(attachment.parentItemID)
-      : null;
+    const parent = getParentItem(attachment);
 
     await this.removeEntryArtifacts(cacheKey);
     const entryDir = this.getEntryDir(cacheKey);
@@ -275,9 +280,7 @@ class MinerUCacheService {
     const fingerprint = await this.getAttachmentFingerprint(attachment);
     const cacheKey = buildMineruCacheKey(attachment.libraryID, attachment.key);
     const index = await this.loadIndex();
-    const parent = attachment.parentItemID
-      ? Zotero.Items.get(attachment.parentItemID)
-      : null;
+    const parent = getParentItem(attachment);
 
     index[cacheKey] = {
       cacheKey,
@@ -301,7 +304,7 @@ class MinerUCacheService {
     const items: MineruCacheListItem[] = [];
 
     for (const record of Object.values(index)) {
-      const attachment = Zotero.Items.getByLibraryAndKey(
+      const attachment = getZoteroItemByKey(
         record.libraryID,
         record.attachmentKey,
       );
@@ -310,31 +313,35 @@ class MinerUCacheService {
         continue;
       }
 
-      const fingerprint = await this.getAttachmentFingerprint(attachment);
-      if (!fingerprint) {
+      try {
+        const fingerprint = await this.getAttachmentFingerprint(attachment);
+        if (!fingerprint) {
+          items.push({ ...record, runtimeStatus: "missing" });
+          continue;
+        }
+
+        if (record.status === "failed") {
+          items.push({ ...record, runtimeStatus: "failed" });
+          continue;
+        }
+
+        if (
+          !isCacheRecordFresh(record, fingerprint.fileSize, fingerprint.fileMtime)
+        ) {
+          items.push({ ...record, runtimeStatus: "stale" });
+          continue;
+        }
+
+        const markdownPath = await this.resolveMarkdownPath(record.cacheKey);
+        if (!markdownPath) {
+          items.push({ ...record, runtimeStatus: "stale" });
+          continue;
+        }
+
+        items.push({ ...record, runtimeStatus: "ready" });
+      } catch {
         items.push({ ...record, runtimeStatus: "missing" });
-        continue;
       }
-
-      if (record.status === "failed") {
-        items.push({ ...record, runtimeStatus: "failed" });
-        continue;
-      }
-
-      if (
-        !isCacheRecordFresh(record, fingerprint.fileSize, fingerprint.fileMtime)
-      ) {
-        items.push({ ...record, runtimeStatus: "stale" });
-        continue;
-      }
-
-      const markdownPath = await this.resolveMarkdownPath(record.cacheKey);
-      if (!markdownPath) {
-        items.push({ ...record, runtimeStatus: "stale" });
-        continue;
-      }
-
-      items.push({ ...record, runtimeStatus: "ready" });
     }
 
     return items.sort((a, b) => b.parsedAt - a.parsedAt);
@@ -378,11 +385,11 @@ class MinerUCacheService {
       if (!record) {
         continue;
       }
-      const attachment = Zotero.Items.getByLibraryAndKey(
+      const attachment = getZoteroItemByKey(
         record.libraryID,
         record.attachmentKey,
       );
-      if (!attachment || !attachment.isPDFAttachment?.()) {
+      if (!attachment?.isPDFAttachment?.()) {
         continue;
       }
       attachments.push(attachment);
@@ -398,14 +405,18 @@ class MinerUCacheService {
     const ids = await search.search();
 
     const pending: Zotero.Item[] = [];
-    for (const id of ids) {
-      const attachment = Zotero.Items.get(id);
-      if (!attachment?.isPDFAttachment?.()) {
+    const items = await Zotero.Items.getAsync(ids);
+    for (const attachment of items) {
+      if (!isZoteroItemAlive(attachment) || !attachment.isPDFAttachment?.()) {
         continue;
       }
-      const cached = await this.getCachedMarkdown(attachment);
-      if (!cached) {
-        pending.push(attachment);
+      try {
+        const cached = await this.getCachedMarkdown(attachment);
+        if (!cached) {
+          pending.push(attachment);
+        }
+      } catch {
+        continue;
       }
     }
     return pending;

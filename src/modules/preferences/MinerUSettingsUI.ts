@@ -19,6 +19,7 @@ let activeCollectionKey: string | null = null;
 let activeTag: string | null = null;
 let cacheSearch = "";
 let tagFilter = "";
+const MINERU_PREFS_BOUND = Symbol("paperchat.mineruPrefsBound");
 
 function statusLabel(status: MineruLibraryRow["runtimeStatus"]): string {
   switch (status) {
@@ -204,6 +205,15 @@ function renderTagList(doc: Document, scopeAttachments: Zotero.Item[]): void {
 }
 
 export async function refreshMineruCacheUI(doc: Document): Promise<void> {
+  try {
+    await renderMineruCacheUI(doc);
+  } catch (error) {
+    setMineruCacheStatus(doc, getErrorMessage(error), true);
+    throw error;
+  }
+}
+
+async function renderMineruCacheUI(doc: Document): Promise<void> {
   const cacheItems = await getMinerUCacheService().listItems();
   const scopeAttachments = await listPdfAttachmentsForScope(activeCollectionKey);
   const rows = buildLibraryRows(scopeAttachments, cacheItems, {
@@ -512,6 +522,12 @@ async function listPendingAttachmentsInScope(): Promise<Zotero.Item[]> {
 }
 
 export function bindMineruPrefEvents(doc: Document): void {
+  if ((doc as Document & { [MINERU_PREFS_BOUND]?: boolean })[MINERU_PREFS_BOUND]) {
+    return;
+  }
+  (doc as Document & { [MINERU_PREFS_BOUND]?: boolean })[MINERU_PREFS_BOUND] =
+    true;
+
   const search = doc.getElementById(
     "pref-mineru-cache-search",
   ) as HTMLInputElement | null;
@@ -649,6 +665,7 @@ export async function registerMineruPrefsScripts(
   try {
     await initializeMineruPrefsUI(doc);
   } catch (error) {
+    setMineruCacheStatus(doc, getErrorMessage(error), true);
     ztoolkit.log("[MinerU Preferences] Failed to initialize:", error);
   }
   try {
