@@ -85,6 +85,10 @@ import {
 } from "../evidence";
 import { getMaxIterationsMessage } from "./messages";
 import {
+  getOutputTruncationContinuationUserMessage,
+  shouldContinueTruncatedOutput,
+} from "./outputTruncationContinuation";
+import {
   SEARCH_SCOPE_TOOL_NAME,
   advanceSearchScopeAfterResults,
   createUnavailableSearchToolResult,
@@ -294,8 +298,6 @@ const MAX_ITERATIONS_ERROR = "Maximum tool-calling iterations reached.";
 const MAX_PRESENTATION_RECOVERY_EXTENSIONS = 2;
 const MAX_PRESENTATION_RECOVERY_NUDGES = 2;
 const MAX_OUTPUT_TRUNCATION_CONTINUATIONS = 3;
-const OUTPUT_TRUNCATION_CONTINUATION_USER_MESSAGE =
-  "Continue your previous answer from exactly where you stopped. Do not repeat content you already provided.";
 const AGENT_TRACE_LOG_PREF =
   "extensions.zotero.paperchat.devEnableAgentTraceLogs";
 
@@ -2840,32 +2842,25 @@ export class AgentRuntime {
     }
   }
 
-  private shouldContinueTruncatedOutput(result: {
-    stopReason?: string;
-    toolCalls?: ToolCall[];
-    content?: string;
-  }): boolean {
-    return (
-      result.stopReason === "max_tokens" &&
-      !(result.toolCalls?.length) &&
-      Boolean((result.content || "").trim())
-    );
-  }
-
   private pushOutputContinuationMessages(
     currentMessages: ChatMessage[],
     partialContent: string,
+    partialReasoning?: string,
   ): void {
     currentMessages.push({
       id: this.callbacks.generateId(),
       role: "assistant",
       content: partialContent,
+      ...(partialReasoning ? { reasoning: partialReasoning } : {}),
       timestamp: Date.now(),
     });
     currentMessages.push({
       id: this.callbacks.generateId(),
       role: "user",
-      content: OUTPUT_TRUNCATION_CONTINUATION_USER_MESSAGE,
+      content: getOutputTruncationContinuationUserMessage(
+        partialContent,
+        partialReasoning,
+      ),
       apiOnly: true,
       timestamp: Date.now(),
     });
@@ -2874,6 +2869,7 @@ export class AgentRuntime {
   private async continueTruncatedOutputRound<
     T extends {
       content?: string;
+      reasoning?: string;
       toolCalls?: ToolCall[];
       hostedWebSearches?: HostedWebSearchCall[];
       stopReason?: string;
@@ -2893,13 +2889,18 @@ export class AgentRuntime {
     let continuations = 0;
 
     while (
-      this.shouldContinueTruncatedOutput(result) &&
+      shouldContinueTruncatedOutput(result) &&
       continuations < MAX_OUTPUT_TRUNCATION_CONTINUATIONS
     ) {
       continuations += 1;
       const partial = result.content || "";
+      const partialReasoning = result.reasoning?.trim() || "";
       workingBase += hostedWebSearchDisplay + partial;
-      this.pushOutputContinuationMessages(params.currentMessages, partial);
+      this.pushOutputContinuationMessages(
+        params.currentMessages,
+        partial,
+        partialReasoning || undefined,
+      );
       ztoolkit.log(
         `[${params.logPrefix}] Output hit max_tokens; auto-continuing (${continuations}/${MAX_OUTPUT_TRUNCATION_CONTINUATIONS})`,
       );
@@ -2959,7 +2960,11 @@ export class AgentRuntime {
     if (!assistantMessage.reasoning) {
       delete assistantMessage.reasoning;
     }
-    assistantMessage.streamingState = undefined;
+    const hasVisibleContent = Boolean(sanitizedDisplay.trim());
+    assistantMessage.streamingState =
+      !hasVisibleContent && assistantMessage.reasoning
+        ? "interrupted"
+        : undefined;
 
     this.executionPlanManager.completeRespondStep(
       sendingSession,

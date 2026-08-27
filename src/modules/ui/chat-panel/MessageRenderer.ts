@@ -33,7 +33,7 @@ import { isTerminalPresentationArtifact } from "../../chat/presentation-artifact
 import { selectChatMessagePresentations } from "../../chat/message-presentation";
 import { canSummarizeAssistantReply } from "./NoteSummaryActions";
 import { canQuoteAssistantReply } from "../../chat/quoted-messages";
-import { estimateTextTokens } from "../../../utils/tokens";
+import { estimateTextTokens, formatCompactTokenCount } from "../../../utils/tokens";
 
 export function getStreamingContentSelector(messageId: string): string {
   return `[data-streaming-content-for="${messageId}"]`;
@@ -1037,7 +1037,9 @@ export function createMessageElement(
 
 function formatThinkingTokenLabel(tokenCount: number): string {
   return getString("chat-thinking-tokens", {
-    args: { tokens: String(Math.max(0, Math.round(tokenCount))) },
+    args: {
+      tokens: formatCompactTokenCount(Math.max(0, tokenCount)),
+    },
   });
 }
 

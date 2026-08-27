@@ -1,7 +1,10 @@
 import type { ChatSession } from "../../../types/chat";
 import { getSessionContextUsage } from "../../chat/ContextManager";
 import { getString } from "../../../utils/locale";
+import { formatCompactTokenCount } from "../../../utils/tokens";
 import type { ThemeColors } from "./types";
+
+export { formatCompactTokenCount };
 
 const RING_RADIUS = 7;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -9,22 +12,6 @@ const refreshTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
 
 export function getContextRingTrackColor(theme: ThemeColors): string {
   return theme.borderColor;
-}
-
-export function formatCompactTokenCount(tokens: number): string {
-  if (!Number.isFinite(tokens) || tokens <= 0) {
-    return "0";
-  }
-  if (tokens >= 1_000_000) {
-    const value = tokens / 1_000_000;
-    return value >= 10
-      ? `${Math.round(value)}M`
-      : `${Math.round(value * 10) / 10}M`;
-  }
-  if (tokens >= 1000) {
-    return `${Math.round(tokens / 1000)}k`;
-  }
-  return String(Math.round(tokens));
 }
 
 function updateProgressRing(
