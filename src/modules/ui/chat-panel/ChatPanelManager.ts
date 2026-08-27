@@ -92,6 +92,7 @@ import {
   setTogglePanelModeFn,
   updatePanelModeButtonIcon,
   updateModelSelectorDisplay,
+  refreshContextWindowUsageForContainer,
   refreshCheckinDisplay,
   syncSendButtonState,
   syncSessionNavigationState,
@@ -2034,6 +2035,7 @@ function setupChatManagerCallbacks(
     },
     onStreamingUpdate: (content, messageId) => {
       if (container) {
+        refreshContextWindowUsageForContainer(container);
         const streamingMarkdown = createChatMarkdownRenderOptions({
           getCurrentItem: () =>
             getQuoteNavigationItem(
@@ -2063,6 +2065,7 @@ function setupChatManagerCallbacks(
     },
     onReasoningUpdate: (reasoning, messageId) => {
       if (container) {
+        refreshContextWindowUsageForContainer(container);
         const activeMessage = manager
           .getActiveSession()
           ?.messages.find((message) => message.id === messageId);
@@ -2975,6 +2978,7 @@ function createContext(container: HTMLElement): ChatPanelContext {
                   container,
                   getCurrentTheme(),
                 )?.update(messages);
+                refreshContextWindowUsageForContainer(container);
                 onRenderComplete?.();
               },
             },

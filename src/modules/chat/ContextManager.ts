@@ -242,7 +242,7 @@ export function normalizeContextAutoCompactWindowTokens(
   );
 }
 
-export function getContextAutoCompactTokenLimit(
+export function getSessionDeclaredContextWindow(
   session?: Pick<ChatSession, "resolvedModelId">,
 ): number {
   const providerManager = getProviderManager();
@@ -259,10 +259,57 @@ export function getContextAutoCompactTokenLimit(
     routingModelInfo.contextWindow && routingModelInfo.contextWindow > 0
       ? routingModelInfo.contextWindow
       : modelInfo?.contextWindow;
-  const contextWindow =
-    declaredContextWindow && declaredContextWindow > 0
-      ? Math.min(configuredContextWindow, declaredContextWindow)
-      : configuredContextWindow;
+  return declaredContextWindow && declaredContextWindow > 0
+    ? Math.min(configuredContextWindow, declaredContextWindow)
+    : configuredContextWindow;
+}
+
+export interface SessionContextUsageSnapshot {
+  usedTokens: number;
+  totalTokens: number;
+  usedPercent: number;
+  remainingPercent: number;
+}
+
+export function getSessionContextUsage(
+  session: ChatSession | null | undefined,
+): SessionContextUsageSnapshot | null {
+  if (!session) {
+    return null;
+  }
+
+  const { messages } = getContextManager().filterMessages(session);
+  const usedTokens = estimateMessagesTokens(
+    applyQuotedMessagesToModelRequest(messages),
+  );
+  const totalTokens = getSessionDeclaredContextWindow(session);
+  if (totalTokens <= 0) {
+    return null;
+  }
+
+  const usedPercent = Math.min(
+    100,
+    Math.max(0, Math.round((usedTokens / totalTokens) * 100)),
+  );
+  return {
+    usedTokens,
+    totalTokens,
+    usedPercent,
+    remainingPercent: Math.max(0, 100 - usedPercent),
+  };
+}
+
+export function getContextAutoCompactTokenLimit(
+  session?: Pick<ChatSession, "resolvedModelId">,
+): number {
+  const contextWindow = getSessionDeclaredContextWindow(session);
+  const providerManager = getProviderManager();
+  const provider = providerManager.getActiveProvider();
+  const config = provider?.config;
+  const modelId = config ? getProviderModelId(config, session) : undefined;
+  const modelInfo =
+    config && modelId ? providerManager.getModelInfo(config.id, modelId) : null;
+  const routingModelInfo = getPaperChatRoutingModelInfo(config, modelId);
   const maxOutput =
     config?.type !== "paperchat" &&
     typeof config?.maxTokens === "number" &&

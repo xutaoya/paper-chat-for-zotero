@@ -7,6 +7,7 @@ import { getString } from "../../../utils/locale";
 import { getPref } from "../../../utils/prefs";
 import { MAX_SEARCH_QUERY_RAW_UTF16_LENGTH } from "../../chat/search/SearchQuery";
 import { createContextItemBanner } from "./ContextItemBanner";
+import { createContextWindowUsageIndicator } from "./contextWindowIndicatorDom";
 import type { ThemeColors } from "./types";
 import { HTML_NS } from "./types";
 
@@ -1135,6 +1136,7 @@ export function createChatContainer(
   sendIcon.style.filter = "brightness(0) invert(1)";
   sendButton.appendChild(sendIcon);
 
+  iconActionsGroup.appendChild(createContextWindowUsageIndicator(doc, theme));
   iconActionsGroup.appendChild(figureScreenshotBtn);
   iconActionsGroup.appendChild(settingsBtn);
   rightContainer.appendChild(iconActionsGroup);

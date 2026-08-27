@@ -6,6 +6,11 @@ import { config } from "../../../../package.json";
 import type { ChatPanelContext, AttachmentState, SessionInfo } from "./types";
 import { createElement, copyToClipboard } from "./ChatPanelBuilder";
 import { updateContextItemBannerForItem } from "./ContextItemBanner";
+import {
+  positionContextWindowUsageTooltip,
+  scheduleContextWindowUsageRefresh,
+  updateContextWindowUsageDisplay,
+} from "./ContextWindowIndicator";
 import { renderQuickActionsBar } from "./QuickActionsController";
 import { getCurrentTheme } from "./ChatPanelTheme";
 import {
@@ -1535,6 +1540,49 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
     );
   }
 
+  const contextUsageBtn = container.querySelector(
+    "#chat-context-usage-btn",
+  ) as HTMLButtonElement | null;
+  const contextUsageTooltip = container.querySelector(
+    "#chat-context-usage-tooltip",
+  ) as HTMLElement | null;
+  if (contextUsageBtn && contextUsageTooltip) {
+    const showContextUsageTooltip = () => {
+      updateContextWindowUsageDisplay(
+        container,
+        getCurrentTheme(),
+        getChatManager().getActiveSession(),
+      );
+      contextUsageTooltip.style.display = "flex";
+      contextUsageTooltip.style.visibility = "hidden";
+      positionContextWindowUsageTooltip(container);
+      contextUsageTooltip.style.visibility = "visible";
+    };
+    const hideContextUsageTooltip = () => {
+      contextUsageTooltip.style.display = "none";
+    };
+
+    const onContextUsageEnter = () => {
+      contextUsageBtn.style.background = getCurrentTheme().buttonHoverBg;
+      showContextUsageTooltip();
+    };
+    const onContextUsageLeave = () => {
+      contextUsageBtn.style.background = "transparent";
+      hideContextUsageTooltip();
+    };
+
+    contextUsageBtn.addEventListener("mouseenter", onContextUsageEnter);
+    contextUsageBtn.addEventListener("mouseleave", onContextUsageLeave);
+    contextUsageBtn.addEventListener("focus", showContextUsageTooltip);
+    contextUsageBtn.addEventListener("blur", hideContextUsageTooltip);
+    disposers.push(() => {
+      contextUsageBtn.removeEventListener("mouseenter", onContextUsageEnter);
+      contextUsageBtn.removeEventListener("mouseleave", onContextUsageLeave);
+      contextUsageBtn.removeEventListener("focus", showContextUsageTooltip);
+      contextUsageBtn.removeEventListener("blur", hideContextUsageTooltip);
+    });
+  }
+
   // Settings button - open preferences
   const settingsBtn = container.querySelector(
     "#chat-settings-btn",
@@ -2509,7 +2557,13 @@ export function updateModelSelectorDisplay(container: HTMLElement): void {
   const modelSelectorText = container.querySelector(
     "#chat-model-selector-text",
   ) as HTMLElement | null;
+  const session = getChatManager().getActiveSession();
+  const refreshContextUsage = () => {
+    updateContextWindowUsageDisplay(container, getCurrentTheme(), session);
+  };
+
   if (!modelSelectorText) {
+    refreshContextUsage();
     return;
   }
 
@@ -2517,6 +2571,7 @@ export function updateModelSelectorDisplay(container: HTMLElement): void {
   const activeProvider = providerManager.getActiveProvider();
   if (!activeProvider) {
     modelSelectorText.textContent = getString("chat-select-model");
+    refreshContextUsage();
     return;
   }
 
@@ -2531,13 +2586,13 @@ export function updateModelSelectorDisplay(container: HTMLElement): void {
     } else {
       modelSelectorText.textContent = activeProvider.getName();
     }
+    refreshContextUsage();
     return;
   }
 
   const tierState = parseTierState(
     getPref("paperchatTierState") as string | undefined,
   );
-  const session = getChatManager().getActiveSession();
   const paperchatConfig = providerManager.getProviderConfig(
     "paperchat",
   ) as PaperChatProviderConfig | null;
@@ -2566,6 +2621,18 @@ export function updateModelSelectorDisplay(container: HTMLElement): void {
   modelSelectorText.textContent = effectiveModel
     ? `PaperChat: ${tierLabel} · ${effectiveModel}`
     : `PaperChat: ${tierLabel}`;
+
+  refreshContextUsage();
+}
+
+export function refreshContextWindowUsageForContainer(
+  container: HTMLElement,
+): void {
+  scheduleContextWindowUsageRefresh(
+    container,
+    getCurrentTheme(),
+    getChatManager().getActiveSession(),
+  );
 }
 
 const REASONING_LABEL_KEYS: Record<ReasoningEffortPreference, string> = {
