@@ -2,7 +2,7 @@
 
 ## Goal
 
-Evolve `paper-chat-for-zotero` from a chat-with-tools plugin into a turn-oriented agent runtime for Zotero research workflows.
+Evolve PaperMind (`paper-mind`, fork of `paper-chat-for-zotero`) from a chat-with-tools plugin into a turn-oriented agent runtime for Zotero research workflows.
 
 The target system should support:
 

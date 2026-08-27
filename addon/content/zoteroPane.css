@@ -3,7 +3,7 @@
 }
 
 /* ========================================
-   Paper Chat - Preferences Panel Styles
+   PaperMind - Preferences Panel Styles
    ======================================== */
 
 .pref-row {
@@ -34,7 +34,7 @@
 }
 
 /* ========================================
-   Paper Chat - Chat Sidebar Styles
+   PaperMind - Chat Sidebar Styles
    ======================================== */
 
 /* Container */
@@ -710,7 +710,7 @@
   }
 }
 
-/* Paper Chat - composer input (suppress native focus chrome) */
+/* PaperMind - composer input (suppress native focus chrome) */
 #chat-message-input,
 #chat-message-input:focus,
 #chat-message-input:focus-visible {

@@ -1,4 +1,4 @@
-pref-title = Paper Chat 设置
+pref-title = PaperMind 设置
 
 # Account Settings
 pref-account-settings = 账户设置

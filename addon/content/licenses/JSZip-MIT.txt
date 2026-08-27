@@ -1,4 +1,4 @@
-JSZip is dual licensed. PaperChat uses it under the MIT license.
+JSZip is dual licensed. PaperMind uses it under the MIT license.
 
 The MIT License
 

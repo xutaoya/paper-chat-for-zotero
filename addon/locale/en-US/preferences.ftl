@@ -1,4 +1,4 @@
-pref-title = Paper Chat Settings
+pref-title = PaperMind Settings
 
 # Account Settings
 pref-account-settings = Account Settings

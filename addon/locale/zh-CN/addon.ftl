@@ -225,7 +225,7 @@ paperchat-guide-toolbar-description = 点击这里打开 AI 聊天面板，与 A
 paperchat-guide-got-it = 知道了
 
 # Chat Panel - Panel Title
-paperchat-chat-panel-title = Paper Chat
+paperchat-chat-panel-title = 论文智读
 
 # Mention Selector
 paperchat-mention-no-match = 没有匹配的资源

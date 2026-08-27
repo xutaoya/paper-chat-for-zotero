@@ -225,7 +225,7 @@ paperchat-guide-toolbar-description = Click here to open the AI chat panel and d
 paperchat-guide-got-it = Got it
 
 # Chat Panel - Panel Title
-paperchat-chat-panel-title = Paper Chat
+paperchat-chat-panel-title = PaperMind
 
 # Mention Selector
 paperchat-mention-no-match = No matching resources
