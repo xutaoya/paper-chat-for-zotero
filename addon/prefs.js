@@ -33,6 +33,8 @@ pref("mineruApiToken", "");
 
 // UI Settings
 pref("panelMode", "sidebar");
+pref("floatingWindowWidth", 420);
+pref("floatingWindowHeight", 600);
 pref("debugContextExportEnabled", false);
 
 // Guide Settings

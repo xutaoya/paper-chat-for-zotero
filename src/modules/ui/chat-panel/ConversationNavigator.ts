@@ -30,10 +30,17 @@ const PREVIEW_DESCRIPTION_LENGTH = 88;
 const FOLLOW_THRESHOLD_PX = 56;
 const RAIL_ITEM_SIZE_PX = 14;
 const RAIL_WIDTH_PX = 32;
+const RAIL_IDLE_WIDTH_PX = 12;
 const TICK_BASE_WIDTH_PX = 28;
+const IDLE_TICK_WIDTH_PX = 6;
+const IDLE_TICK_OPACITY = 0.3;
+const IDLE_ACTIVE_TICK_OPACITY = 0.72;
 const TICK_HEIGHT_PX = 2;
+const RAIL_ENGAGE_HIDE_DELAY_MS = 900;
 const TICK_TRANSITION =
   "width 220ms cubic-bezier(0.34, 1.2, 0.64, 1), opacity 180ms ease, color 180ms ease";
+const NAV_ROOT_IDLE_CLASS = "chat-conversation-nav--idle";
+const NAV_ROOT_ENGAGED_CLASS = "chat-conversation-nav--engaged";
 
 export interface ConversationTurn {
   anchorMessageId: string;
@@ -200,6 +207,34 @@ export function resolvePreviewRailTickScale(
   return 0.25;
 }
 
+export function resolveRailTickVisual(options: {
+  index: number;
+  activeIndex: number;
+  focusIndex: number;
+  engaged: boolean;
+  baseWidth?: number;
+}): { width: number; opacity: number; emphasized: boolean } {
+  if (!options.engaged) {
+    const isActive = options.index === options.activeIndex;
+    return {
+      width: IDLE_TICK_WIDTH_PX,
+      opacity: isActive ? IDLE_ACTIVE_TICK_OPACITY : IDLE_TICK_OPACITY,
+      emphasized: isActive,
+    };
+  }
+
+  const scale = resolvePreviewRailTickScale(options.index, options.focusIndex);
+  const isFocused = options.index === options.focusIndex;
+  return {
+    width: Math.max(
+      4,
+      Math.round((options.baseWidth ?? TICK_BASE_WIDTH_PX) * scale),
+    ),
+    opacity: isFocused ? 1 : 0.45,
+    emphasized: isFocused,
+  };
+}
+
 export function resolveActiveRailItemId(
   items: PreviewRailItem[],
   chatHistory: HTMLElement,
@@ -360,28 +395,40 @@ function updateRailTickVisuals(
   theme: ThemeColors,
   activeIndex: number,
   highlightedIndex: number,
+  engaged: boolean,
 ): void {
   const focusIndex = resolveRailFocusIndex(activeIndex, highlightedIndex);
   const buttons = elements.ticks.querySelectorAll(
     `.${NAV_TICK_BUTTON_CLASS}`,
   );
 
+  elements.ticks.style.justifyItems = engaged ? "start" : "center";
+  elements.root.style.width = engaged
+    ? `${RAIL_WIDTH_PX}px`
+    : `${RAIL_IDLE_WIDTH_PX}px`;
+  elements.rail.style.width = engaged
+    ? `${RAIL_WIDTH_PX}px`
+    : `${RAIL_IDLE_WIDTH_PX}px`;
+
   buttons.forEach((node, index) => {
     const button = node as HTMLElement;
     const item = items[index];
     if (!item) return;
 
-    const scale = resolvePreviewRailTickScale(index, focusIndex);
-    const isFocused = index === focusIndex;
-    const tickWidth = Math.max(4, Math.round(TICK_BASE_WIDTH_PX * scale));
+    const visual = resolveRailTickVisual({
+      index,
+      activeIndex,
+      focusIndex,
+      engaged,
+    });
     const mark = button.querySelector(
       `.${NAV_TICK_MARK_CLASS}`,
     ) as HTMLElement | null;
 
-    button.style.color = isFocused ? theme.textPrimary : theme.textMuted;
+    button.style.color = visual.emphasized ? theme.textPrimary : theme.textMuted;
     if (mark) {
-      mark.style.width = `${tickWidth}px`;
-      mark.style.opacity = isFocused ? "1" : "0.45";
+      mark.style.width = `${visual.width}px`;
+      mark.style.opacity = String(visual.opacity);
     }
   });
 }
@@ -476,6 +523,9 @@ export function attachConversationNavigator(
   let activeIndex = 0;
   let highlightedIndex = -1;
   let hidePreviewTimer: ReturnType<typeof setTimeout> | null = null;
+  let engageHideTimer: ReturnType<typeof setTimeout> | null = null;
+  let isRailEngaged = false;
+  let isPointerOverRail = false;
   let mounted = false;
 
   chatViewport.querySelector(`#${NAV_ROOT_ID}`)?.remove();
@@ -563,6 +613,7 @@ export function attachConversationNavigator(
     mounted = true;
     chatViewport.appendChild(root);
     chatViewport.appendChild(preview);
+    setRailEngaged(false);
   };
 
   const unmount = () => {
@@ -580,6 +631,36 @@ export function attachConversationNavigator(
     }
   };
 
+  const clearEngageHideTimer = () => {
+    if (engageHideTimer) {
+      clearTimeout(engageHideTimer);
+      engageHideTimer = null;
+    }
+  };
+
+  const setRailEngaged = (engaged: boolean) => {
+    if (isRailEngaged === engaged) return;
+    isRailEngaged = engaged;
+    root.classList.toggle(NAV_ROOT_IDLE_CLASS, !engaged);
+    root.classList.toggle(NAV_ROOT_ENGAGED_CLASS, engaged);
+    refreshTickVisuals();
+  };
+
+  const engageRail = () => {
+    clearEngageHideTimer();
+    setRailEngaged(true);
+  };
+
+  const scheduleRailIdle = () => {
+    clearEngageHideTimer();
+    engageHideTimer = setTimeout(() => {
+      engageHideTimer = null;
+      if (!isPointerOverRail) {
+        setRailEngaged(false);
+      }
+    }, RAIL_ENGAGE_HIDE_DELAY_MS);
+  };
+
   const refreshTickVisuals = () => {
     updateRailTickVisuals(
       elements,
@@ -587,6 +668,7 @@ export function attachConversationNavigator(
       theme,
       activeIndex,
       highlightedIndex,
+      isRailEngaged,
     );
   };
 
@@ -627,11 +709,21 @@ export function attachConversationNavigator(
   };
 
   const onScroll = () => {
+    engageRail();
+    scheduleRailIdle();
     updateActiveItem();
   };
 
-  const onRootEnter = () => clearHidePreviewTimer();
-  const onRootLeave = () => scheduleHidePreview();
+  const onRootEnter = () => {
+    isPointerOverRail = true;
+    engageRail();
+    clearHidePreviewTimer();
+  };
+  const onRootLeave = () => {
+    isPointerOverRail = false;
+    scheduleHidePreview();
+    scheduleRailIdle();
+  };
 
   const resolveTickIndex = (target: EventTarget | null): number => {
     const button = (target as HTMLElement | null)?.closest?.(
@@ -705,6 +797,7 @@ export function attachConversationNavigator(
     },
     dispose() {
       clearHidePreviewTimer();
+      clearEngageHideTimer();
       ticks.removeEventListener("mouseover", onTicksPointerOver);
       ticks.removeEventListener("focusin", onTicksFocusIn);
       ticks.removeEventListener("click", onTicksClick);

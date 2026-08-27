@@ -8,6 +8,7 @@ import {
   resolveEvenTurnRailRatio,
   resolvePreviewRailTickScale,
   resolveRailFocusIndex,
+  resolveRailTickVisual,
   truncateConversationPreview,
   truncateMessageText,
 } from "../src/modules/ui/chat-panel/ConversationNavigator.ts";
@@ -115,6 +116,32 @@ describe("conversation navigator", function () {
     assert.equal(resolvePreviewRailTickScale(1, 2), 0.68);
     assert.equal(resolvePreviewRailTickScale(0, 2), 0.44);
     assert.equal(resolvePreviewRailTickScale(5, 2), 0.25);
+  });
+
+  it("uses compact ticks while idle and expands them when engaged", function () {
+    const idle = resolveRailTickVisual({
+      index: 1,
+      activeIndex: 1,
+      focusIndex: 1,
+      engaged: false,
+    });
+    const idleInactive = resolveRailTickVisual({
+      index: 0,
+      activeIndex: 1,
+      focusIndex: 1,
+      engaged: false,
+    });
+    const engaged = resolveRailTickVisual({
+      index: 1,
+      activeIndex: 1,
+      focusIndex: 1,
+      engaged: true,
+    });
+
+    assert.equal(idle.width, 6);
+    assert.isBelow(idleInactive.opacity, idle.opacity);
+    assert.isAbove(engaged.width, idle.width);
+    assert.equal(engaged.opacity, 1);
   });
 
   it("resolves the active rail item from the viewport center", function () {

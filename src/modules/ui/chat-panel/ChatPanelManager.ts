@@ -105,6 +105,10 @@ import {
   NextQuestionHintController,
   requestNextQuestionHintAfterRecentRender,
 } from "./NextQuestionHintController";
+import {
+  resolveFloatingWindowSize,
+  normalizeFloatingWindowSize,
+} from "./floatingWindowBounds";
 
 // Panel display mode: 'sidebar' or 'floating'
 export type PanelMode = "sidebar" | "floating";
@@ -1162,9 +1166,54 @@ function continueApprovalTransition(
   });
 }
 
-// Floating window default size
-const FLOATING_WIDTH = 420;
-const FLOATING_HEIGHT = 600;
+// Floating window resize persistence
+let floatingWindowResizeHandler: (() => void) | null = null;
+let floatingWindowResizeSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function getSavedFloatingWindowSize(): { width: number; height: number } {
+  return resolveFloatingWindowSize(
+    getPref("floatingWindowWidth"),
+    getPref("floatingWindowHeight"),
+  );
+}
+
+function persistFloatingWindowSize(win: Window): void {
+  const { width, height } = normalizeFloatingWindowSize(
+    win.outerWidth,
+    win.outerHeight,
+  );
+  setPref("floatingWindowWidth", width);
+  setPref("floatingWindowHeight", height);
+}
+
+function setupFloatingWindowSizePersistence(win: Window): void {
+  teardownFloatingWindowSizePersistence(win);
+
+  const scheduleSave = () => {
+    if (floatingWindowResizeSaveTimer) {
+      clearTimeout(floatingWindowResizeSaveTimer);
+    }
+    floatingWindowResizeSaveTimer = setTimeout(() => {
+      floatingWindowResizeSaveTimer = null;
+      persistFloatingWindowSize(win);
+    }, 300);
+  };
+
+  floatingWindowResizeHandler = scheduleSave;
+  win.addEventListener("resize", scheduleSave);
+}
+
+function teardownFloatingWindowSizePersistence(win: Window | null): void {
+  if (floatingWindowResizeSaveTimer) {
+    clearTimeout(floatingWindowResizeSaveTimer);
+    floatingWindowResizeSaveTimer = null;
+  }
+  if (win && floatingWindowResizeHandler) {
+    win.removeEventListener("resize", floatingWindowResizeHandler);
+    persistFloatingWindowSize(win);
+  }
+  floatingWindowResizeHandler = null;
+}
 
 // Initialize the events module with the getActiveReaderItem function reference
 // This is done immediately to avoid issues with early calls
@@ -1446,10 +1495,9 @@ function openFloatingWindow(): boolean {
   floatingContentInitialized = false;
 
   const mainWindow = Zotero.getMainWindow();
+  const { width, height } = getSavedFloatingWindowSize();
 
   // Calculate position (center on main window)
-  const width = FLOATING_WIDTH;
-  const height = FLOATING_HEIGHT;
   const left = mainWindow.screenX + (mainWindow.outerWidth - width) / 2;
   const top = mainWindow.screenY + (mainWindow.outerHeight - height) / 2;
 
@@ -1470,11 +1518,16 @@ function openFloatingWindow(): boolean {
   // Wait for window to load, then initialize content
   floatingWindow.addEventListener("load", () => {
     ztoolkit.log("Floating window load event fired");
+    if (floatingWindow) {
+      setupFloatingWindowSizePersistence(floatingWindow);
+    }
     initializeFloatingWindowContent();
 
     // Handle window close - only after content is loaded
-    floatingWindow?.addEventListener("unload", () => {
+    const activeFloatingWindow = floatingWindow;
+    activeFloatingWindow?.addEventListener("unload", () => {
       ztoolkit.log("Floating window unload event");
+      teardownFloatingWindowSizePersistence(activeFloatingWindow);
       if (!suppressFloatingUnloadTracking) {
         trackChatPanelClosed();
       }
@@ -1776,9 +1829,11 @@ function closeFloatingWindow(): void {
     cleanupPanelIntegrations(floatingContainer);
   }
 
-  if (floatingWindow && !floatingWindow.closed) {
+  const win = floatingWindow;
+  if (win && !win.closed) {
+    teardownFloatingWindowSizePersistence(win);
     suppressFloatingUnloadTracking = true;
-    floatingWindow.close();
+    win.close();
   } else {
     suppressFloatingUnloadTracking = false;
   }

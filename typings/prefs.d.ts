@@ -31,6 +31,8 @@ declare namespace _ZoteroTypes {
       "useMineruOnExtractFailure": boolean;
       "mineruApiToken": string;
       "panelMode": string;
+      "floatingWindowWidth": number;
+      "floatingWindowHeight": number;
       "debugContextExportEnabled": boolean;
       "firstInstalledVersion": string;
       "guideStatus": number;
