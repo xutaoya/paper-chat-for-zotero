@@ -33,7 +33,7 @@ import { isTerminalPresentationArtifact } from "../../chat/presentation-artifact
 import { selectChatMessagePresentations } from "../../chat/message-presentation";
 import { canSummarizeAssistantReply } from "./NoteSummaryActions";
 import { canQuoteAssistantReply } from "../../chat/quoted-messages";
-import { estimateTextTokens, formatCompactTokenCount } from "../../../utils/tokens";
+import { formatCompactTokenCount, resolveReasoningTokenCount } from "../../../utils/tokens";
 
 export function getStreamingContentSelector(messageId: string): string {
   return `[data-streaming-content-for="${messageId}"]`;
@@ -952,35 +952,30 @@ export function createMessageElement(
 
   // Add reasoning section for assistant messages (before content)
   if (msg.role === "assistant") {
-    if (msg.reasoning) {
-      // Completed message with reasoning - show collapsed
+    const isReasoningStreaming =
+      isLastAssistant && msg.streamingState === "in_progress";
+    if (msg.reasoning || isReasoningStreaming) {
       const reasoningContainer = createReasoningContainer(
         doc,
         theme,
-        msg.reasoning,
-        false,
+        msg.reasoning || "",
+        isReasoningStreaming,
         msg.id,
         msg.reasoningTokens,
       );
-      bubble.appendChild(reasoningContainer);
-    } else if (isLastAssistant && msg.streamingState === "in_progress") {
-      // Streaming placeholder - hidden by default, shown when reasoning arrives
-      const reasoningContainer = createReasoningContainer(
-        doc,
-        theme,
-        "",
-        true,
-        msg.id,
-      );
-      reasoningContainer.setAttribute(
-        "data-streaming-reasoning-container-for",
-        msg.id,
-      );
-      const reasoningBody = reasoningContainer.querySelector(
-        '[data-streaming-reasoning-role="body"]',
-      ) as HTMLElement | null;
-      reasoningBody?.setAttribute("data-streaming-reasoning-for", msg.id);
-      reasoningContainer.style.display = "none";
+      if (isReasoningStreaming) {
+        reasoningContainer.setAttribute(
+          "data-streaming-reasoning-container-for",
+          msg.id,
+        );
+        const reasoningBody = reasoningContainer.querySelector(
+          '[data-streaming-reasoning-role="body"]',
+        ) as HTMLElement | null;
+        reasoningBody?.setAttribute("data-streaming-reasoning-for", msg.id);
+        if (!msg.reasoning) {
+          reasoningContainer.style.display = "none";
+        }
+      }
       bubble.appendChild(reasoningContainer);
     }
   }
@@ -1073,10 +1068,7 @@ export function updateStreamingReasoningTokens(
   messageId: string,
   apiReasoningTokens?: number,
 ): void {
-  const tokenCount =
-    apiReasoningTokens !== undefined
-      ? apiReasoningTokens
-      : estimateTextTokens(reasoning);
+  const tokenCount = resolveReasoningTokenCount(reasoning, apiReasoningTokens);
   const badge = container.querySelector(
     getStreamingReasoningTokensSelector(messageId),
   ) as HTMLElement | null;
@@ -1153,7 +1145,7 @@ function createReasoningContainer(
   const tokenBadge = createReasoningTokenBadge(
     doc,
     theme,
-    reasoningTokens ?? estimateTextTokens(reasoning),
+    resolveReasoningTokenCount(reasoning, reasoningTokens),
     isStreaming ? messageId : undefined,
   );
 
@@ -1177,6 +1169,9 @@ function createReasoningContainer(
 
   if (isStreaming) {
     body.setAttribute("data-streaming-reasoning-role", "body");
+    if (reasoning) {
+      body.textContent = reasoning;
+    }
   } else {
     body.textContent = reasoning;
   }

@@ -31,3 +31,15 @@ export function formatCompactTokenCount(tokens: number): string {
   }
   return String(Math.round(tokens));
 }
+
+/** Prefer provider usage when higher; otherwise grow with streamed reasoning text. */
+export function resolveReasoningTokenCount(
+  reasoning: string,
+  apiReasoningTokens?: number,
+): number {
+  const estimated = estimateTextTokens(reasoning);
+  if (apiReasoningTokens === undefined) {
+    return estimated;
+  }
+  return Math.max(apiReasoningTokens, estimated);
+}
