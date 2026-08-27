@@ -151,25 +151,7 @@ export default defineConfig({
         },
         bundle: true,
         target: "firefox115",
-        inject: [
-          "src/modules/presentation/renderer/set-immediate-browser-shim.ts",
-        ],
         outfile: `.scaffold/build/addon/content/scripts/${pkg.config.addonRef}.js`,
-      },
-      {
-        entryPoints: [
-          "src/modules/presentation/renderer/presentation-renderer-entry.ts",
-        ],
-        bundle: true,
-        format: "iife",
-        globalName: "PaperChatPresentationRendererBundle",
-        platform: "browser",
-        target: "firefox115",
-        inject: [
-          "src/modules/presentation/renderer/set-immediate-browser-shim.ts",
-        ],
-        outfile:
-          ".scaffold/build/addon/content/scripts/paperchat-ppt-renderer.js",
       },
     ],
   },

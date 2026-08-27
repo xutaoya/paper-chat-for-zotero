@@ -51,18 +51,16 @@ export interface ModelInfo {
  * Supported provider types
  */
 export type ProviderType =
-  | "paperchat" // PaperChat login-based system
-  | "openai" // Native OpenAI API
-  | "anthropic" // Anthropic Claude API (different format)
-  | "gemini" // Google Gemini API (different format)
-  | "openai-compatible" // DeepSeek and user-configured compatible APIs
-  | "custom"; // User-defined OpenAI-compatible
+  | "openai"
+  | "anthropic"
+  | "gemini"
+  | "openai-compatible"
+  | "custom";
 
 /**
  * Provider identifier for built-in providers
  */
 export type BuiltinProviderId =
-  | "paperchat"
   | "openai"
   | "claude"
   | "gemini"
@@ -78,21 +76,6 @@ export interface BaseProviderConfig {
   enabled: boolean;
   isBuiltin: boolean;
   order: number;
-}
-
-/**
- * Configuration for PaperChat (login-based) provider
- */
-export interface PaperChatProviderConfig extends BaseProviderConfig {
-  type: "paperchat";
-  defaultModel?: string;
-  resolvedModelOverride?: string;
-  availableModels?: string[];
-  maxTokens?: number;
-  temperature?: number;
-  systemPrompt?: string;
-  /** Runtime-only session binding used for Responses conversation state. */
-  requestSessionId?: string;
 }
 
 /**
@@ -119,7 +102,7 @@ export interface ApiKeyProviderConfig extends BaseProviderConfig {
 /**
  * Union type for all provider configs
  */
-export type ProviderConfig = PaperChatProviderConfig | ApiKeyProviderConfig;
+export type ProviderConfig = ApiKeyProviderConfig;
 
 /**
  * Provider metadata for display and defaults

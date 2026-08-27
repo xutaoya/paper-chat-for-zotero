@@ -1,7 +1,6 @@
 // API Configuration
 pref("apiKey", "");
-pref("baseUrl", "https://paperchat.zotero.store/v1");
-pref("model", "auto-smart");
+pref("model", "");
 pref("maxTokens", 0);
 pref("temperature", "0.7");
 pref(
@@ -9,27 +8,12 @@ pref(
   "You are a helpful research assistant. Help the user understand and analyze academic papers and documents.",
 );
 
-pref("username", "");
-pref("loginPassword", ""); // 存储密码用于自动重新登录
-pref("userId", 0);
-pref("userQuotaJson", "");
-pref("userSubscriptionJson", "");
-
-// Cache
-pref("paperchatModelsCache", "");
-pref("paperchatRatiosCache", "");
-pref("paperchatRoutingConfigCache", "");
-pref("paperchatTierState", "");
-pref("paperchatSuppressHighTierWarning", false);
-pref("paperchatPresentationSlideCount", 6);
-pref("paperchatPresentationDesignSystem", "teal-green-academic-defense");
-pref("reasoningEffort", "default");
-pref("paperchatBaseUrlOverride", "");
-
 // PDF Settings
 pref("uploadRawPdfOnFailure", false);
 pref("useMineruOnExtractFailure", false);
 pref("mineruApiToken", "");
+
+pref("reasoningEffort", "default");
 
 // UI Settings
 pref("panelMode", "sidebar");

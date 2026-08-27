@@ -2,13 +2,11 @@ import type { ChatMessage, ChatSession } from "../../types/chat";
 import type { AIProvider } from "../../types/provider";
 import { getErrorMessage } from "../../utils/common";
 import { getProviderManager } from "../providers";
-import { createPaperChatLightweightProvider } from "../providers/PaperChatLightweightProvider";
 
 const TITLE_SYSTEM_PROMPT =
   "Generate a concise title for this chat session. Return only the title, with no quotes, no markdown, and no trailing punctuation. Use the conversation language when obvious. Limit to 8 English words or 16 Chinese characters.";
 const MAX_TITLE_INPUT_LENGTH = 8000;
 const MAX_TITLE_LENGTH = 60;
-const TITLE_MAX_TOKENS = 256;
 
 function isTitleEligible(session: ChatSession): boolean {
   if (session.title?.trim()) {
@@ -61,20 +59,8 @@ function sanitizeTitle(raw: string): string {
     .trim();
 }
 
-function createPaperChatTitleProvider(): AIProvider | null {
-  return createPaperChatLightweightProvider({
-    maxTokens: TITLE_MAX_TOKENS,
-    temperature: 0.2,
-    systemPrompt: "",
-  });
-}
-
 function getTitleProvider(): AIProvider | null {
-  const providerManager = getProviderManager();
-  if (providerManager.getActiveProviderId() === "paperchat") {
-    return createPaperChatTitleProvider();
-  }
-  return providerManager.getActiveProvider();
+  return getProviderManager().getActiveProvider();
 }
 
 export class SessionTitleService {

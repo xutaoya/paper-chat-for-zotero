@@ -90,8 +90,8 @@ function getToolParameters(
       ToolDefinition["function"]["parameters"]
     >();
     for (const definition of getPdfToolManager().getToolDefinitions(true, {
-      includePresentation: true,
-      includePresentationLauncher: true,
+      includePresentation: false,
+      includePresentationLauncher: false,
     })) {
       toolDefinitions.set(
         definition.function.name,

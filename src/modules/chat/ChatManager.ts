@@ -29,7 +29,6 @@ import type {
 import type {
   ToolCallingProvider,
   AIProvider,
-  PaperChatProviderConfig,
 } from "../../types/provider";
 import type { PresentationCardProgress } from "../presentation/contracts";
 import {
@@ -51,9 +50,8 @@ import {
 import { getToolScheduler } from "./tool-scheduler";
 import { getSkillRegistry, type SelectedPaperChatSkill } from "./skills";
 import { getSessionArtifactStore } from "./session-artifacts";
-import { getProviderManager, PaperChatProvider } from "../providers";
+import { getProviderManager } from "../providers";
 import type { ProviderRetryOptions } from "../providers/ProviderManager";
-import { getAuthManager } from "../auth";
 import { getString } from "../../utils/locale";
 import { getPref } from "../../utils/prefs";
 import {
@@ -67,26 +65,11 @@ import {
   generateTimestampId,
 } from "../../utils/common";
 import {
-  getModelRatios,
-  getModelRoutingMeta,
-} from "../preferences/ModelsFetcher";
-import {
-  isPaperChatModelHardFailure,
-  type PaperChatTier,
-} from "../providers/paperchat-tier-routing";
-import { isPaperChatQuotaError } from "../providers/paperchat-errors";
-import {
-  applyPaperChatSessionBinding,
-  clearPaperChatRetryableState,
-  resolvePaperChatSessionBinding,
-} from "./paperchat-session-state";
-import { PaperChatRetryOrchestrator } from "./PaperChatRetryOrchestrator";
-import {
-  PaperChatTierController,
+  FailureTurnHandler,
+  clearRetryableFailureState,
   selectMoreSubstantialSnapshot,
   type FailedAssistantSnapshot,
-  type PaperChatTierRerollResult,
-} from "./PaperChatTierController";
+} from "./FailureTurnHandler";
 import { ToolApprovalCoordinator } from "./ToolApprovalCoordinator";
 import { resolveConversationTurnSlice } from "./conversation-turn";
 import {
@@ -163,7 +146,6 @@ type RetryGuardedError = Error & {
 
 type InternalSendMessageOptions = SendMessageOptions & {
   item?: Zotero.Item | null;
-  fromPaperChatReroll?: boolean;
   resumeFailedTurn?: boolean;
   reuseUserMessageId?: string;
   reuseAssistantMessageId?: string;
@@ -172,10 +154,8 @@ type InternalSendMessageOptions = SendMessageOptions & {
   allowedToolNames?: readonly string[];
   lockedToolItemKey?: string;
   modelRequestContent?: string;
-  allowPaperChatRetry?: boolean;
   trustedSourceItemKeys?: readonly string[];
   noteSummaryContext?: NoteSummaryContext;
-  requiredProviderId?: "paperchat";
   presentationAuthorization?: PresentationLaunchAuthorization;
   onAssistantMessageCreated?: (location: {
     sessionId: string;
@@ -214,23 +194,8 @@ function providerSupportsStreamingToolCalling(
   );
 }
 
-function isDeepSeekToolPromptCacheTarget(
-  provider: AIProvider,
-  resolvedPaperChatModelId?: string | null,
-): boolean {
-  const providerId = provider.config.id.toLowerCase();
-  const modelId =
-    providerId === "paperchat"
-      ? (
-          resolvedPaperChatModelId ||
-          provider.config.defaultModel ||
-          ""
-        ).toLowerCase()
-      : (provider.config.defaultModel || "").toLowerCase();
-  return (
-    providerId === "deepseek" ||
-    (providerId === "paperchat" && modelId.includes("deepseek"))
-  );
+function isDeepSeekToolPromptCacheTarget(provider: AIProvider): boolean {
+  return provider.config.id.toLowerCase() === "deepseek";
 }
 
 function buildStableToolCatalogForPromptCache(tools: ToolDefinition[]): string {
@@ -269,7 +234,7 @@ function getPresentationToolPromptMode(
 
 export class ChatManager {
   private sessionStorage: SessionStorageService;
-  private paperChatRetry: PaperChatRetryOrchestrator;
+  private failureTurnHandler: FailureTurnHandler;
   private pdfExtractor: PdfExtractor;
   private currentSession: ChatSession | null = null;
   private currentItemKey: string | null = null;
@@ -288,8 +253,6 @@ export class ChatManager {
     string,
     ManagedAbortController
   >();
-  private paperChatRerollSessions = new Set<string>();
-
   private memoryManager: MemoryManager;
   private sessionTitleService: SessionTitleService;
   private agentRuntime: AgentRuntime;
@@ -308,12 +271,9 @@ export class ChatManager {
 
   constructor() {
     this.sessionStorage = new SessionStorageService();
-    this.paperChatRetry = new PaperChatRetryOrchestrator({
-      updateSessionMeta: (session) =>
-        this.sessionStorage.updateSessionMeta(session),
-      insertSystemNotice: (session, content) =>
-        this.insertSystemNotice(session, content),
-    });
+    this.failureTurnHandler = new FailureTurnHandler(
+      () => this.sessionStorage,
+    );
     this.pdfExtractor = new PdfExtractor();
     this.memoryManager = new MemoryManager(this.sessionStorage);
     this.sessionTitleService = new SessionTitleService();
@@ -543,110 +503,18 @@ export class ChatManager {
   /**
    * 检查错误是否为认证错误 (401/403 或令牌相关错误)
    */
-  private isAuthError(error: Error): boolean {
-    const message = error.message || "";
-    // Quota failures may also arrive as HTTP 403, so this must run before the generic 403/auth checks.
-    if (isPaperChatQuotaError(error)) {
-      return false;
-    }
-    return (
-      message.includes("API Error: 401") ||
-      message.includes("API Error: 403") ||
-      message.includes("Unauthorized") ||
-      message.includes("Invalid API key") ||
-      message.includes("authentication") ||
-      message.includes("invalid_api_key") ||
-      message.includes("无效的令牌") ||
-      message.includes("未提供令牌") ||
-      message.includes("令牌状态不可用") ||
-      message.includes("令牌已过期") ||
-      message.includes("令牌额度不足")
-    );
-  }
-
   private createProviderRetryOptions(
     abortSignal?: AbortSignal,
   ): ProviderRetryOptions {
-    let paperChatAuthReplayUsed = false;
     return {
       abortSignal,
-      shouldRetry: async (error, provider) => {
+      shouldRetry: async (error) => {
         if ((error as RetryGuardedError)[SUPPRESS_AUTOMATIC_RETRY] === true) {
           return false;
-        }
-        if (
-          provider.config.id === "paperchat" &&
-          isPaperChatModelHardFailure(error)
-        ) {
-          // The request path already reroutes once within the same tier.
-          return false;
-        }
-        if (provider.config.id === "paperchat" && this.isAuthError(error)) {
-          if (paperChatAuthReplayUsed) {
-            return false;
-          }
-          paperChatAuthReplayUsed = true;
-          try {
-            const refreshed = await getAuthManager().ensurePluginToken(true);
-            if (!refreshed) {
-              ztoolkit.log(
-                "[API Retry] PaperChat token refresh did not produce a usable token",
-              );
-              return false;
-            }
-            ztoolkit.log(
-              "[API Retry] PaperChat token refreshed; replaying the same request",
-            );
-            return true;
-          } catch (refreshError) {
-            ztoolkit.log(
-              "[API Retry] Failed to refresh PaperChat token:",
-              refreshError,
-            );
-            return false;
-          }
         }
         return getProviderManager().isRetryableError(error);
       },
     };
-  }
-
-  private async ensurePaperChatModelResolved(
-    session: ChatSession,
-    persist: boolean = true,
-  ): Promise<string> {
-    const providerManager = getProviderManager();
-    const paperchatProvider = providerManager.getProvider("paperchat");
-    const paperchatConfig = providerManager.getProviderConfig(
-      "paperchat",
-    ) as PaperChatProviderConfig | null;
-
-    if (!paperchatProvider || !paperchatConfig) {
-      throw new Error("PaperChat provider is not configured");
-    }
-
-    const binding = resolvePaperChatSessionBinding(
-      session,
-      getPref("paperchatTierState") as string | undefined,
-      paperchatConfig.availableModels || [],
-      getModelRatios(),
-      undefined,
-      getModelRoutingMeta(),
-    );
-
-    const didChange = persist
-      ? applyPaperChatSessionBinding(session, binding)
-      : false;
-
-    if (persist && didChange) {
-      await this.sessionStorage.updateSessionMeta(session);
-    }
-
-    paperchatProvider.updateConfig({
-      resolvedModelOverride: binding.modelId,
-    });
-
-    return binding.modelId;
   }
 
   private async insertSystemNotice(
@@ -862,10 +730,7 @@ export class ChatManager {
       ? providerSupportsToolCalling(provider)
       : false;
     const providerConfig = provider?.config;
-    const providerModel =
-      providerConfig?.type === "paperchat"
-        ? providerConfig.resolvedModelOverride || providerConfig.defaultModel
-        : providerConfig?.defaultModel;
+    const providerModel = providerConfig?.defaultModel;
     const providerSystemPrompt =
       providerConfig && "systemPrompt" in providerConfig
         ? providerConfig.systemPrompt
@@ -1514,71 +1379,6 @@ export class ChatManager {
     this.onMessageUpdate?.(this.currentSession!.messages);
   }
 
-  private paperChatTierController?: PaperChatTierController;
-
-  /**
-   * Lazily built so white-box tests that create managers via
-   * Object.create(ChatManager.prototype) get a working controller: the
-   * getter lives on the prototype and the host arrows read the manager's
-   * fields at call time.
-   */
-  private get paperChatTier(): PaperChatTierController {
-    if (!this.paperChatTierController) {
-      this.paperChatTierController = new PaperChatTierController({
-        init: () => this.init(),
-        getCurrentSession: () => this.currentSession,
-        getSessionStorage: () => this.sessionStorage,
-        isSessionRunActive: (sessionId) =>
-          this.activeSessionRunIds.has(sessionId),
-        isRerollInProgress: (sessionId) =>
-          this.paperChatRerollSessions.has(sessionId),
-        beginReroll: (sessionId) => {
-          this.paperChatRerollSessions.add(sessionId);
-        },
-        endReroll: (sessionId) => {
-          this.paperChatRerollSessions.delete(sessionId);
-        },
-        rerollTier: () => this.rerollCurrentPaperChatTier(),
-        buildReroutedNotice: (tier, previousModel, nextModel) =>
-          this.paperChatRetry.buildReroutedNotice(
-            tier,
-            previousModel,
-            nextModel,
-          ),
-        insertSystemNotice: (session, content) =>
-          this.insertSystemNotice(session, content),
-        sendMessage: (content, options) => this.sendMessage(content, options),
-        getSessionItem: (session) => this.getSessionItem(session),
-        notifyMessagesUpdated: (messages) => {
-          this.onMessageUpdate?.(messages);
-        },
-      });
-    }
-    return this.paperChatTierController;
-  }
-
-  async rerollCurrentPaperChatTier(): Promise<PaperChatTierRerollResult | null> {
-    return this.paperChatTier.rerollCurrentPaperChatTier();
-  }
-
-  async switchCurrentSessionPaperChatTier(
-    tier: PaperChatTier,
-    modelOverride?: string | null,
-  ): Promise<void> {
-    return this.paperChatTier.switchCurrentSessionPaperChatTier(
-      tier,
-      modelOverride,
-    );
-  }
-
-  async clearCurrentSessionPaperChatRetryableState(): Promise<void> {
-    return this.paperChatTier.clearCurrentSessionPaperChatRetryableState();
-  }
-
-  async retryCurrentPaperChatFailure(): Promise<boolean> {
-    return this.paperChatTier.retryCurrentPaperChatFailure();
-  }
-
   async retryFailedTurn(
     sessionId: string,
     errorMessageId: string,
@@ -1636,38 +1436,16 @@ export class ChatManager {
     return true;
   }
 
-  async rerollCurrentPaperChatFailureAndRetry(): Promise<PaperChatTierRerollResult | null> {
-    return this.paperChatTier.rerollCurrentPaperChatFailureAndRetry();
-  }
-
-  async applyPaperChatFailureState(
-    session: ChatSession,
-    userMessageId: string,
-    errorMessage: ChatMessage,
-    error: unknown,
-    failedProviderId: string,
-    failedModelId: string | null,
-    allowRetry: boolean = true,
-  ): Promise<void> {
-    return this.paperChatTier.applyPaperChatFailureState(
-      session,
-      userMessageId,
-      errorMessage,
-      error,
-      failedProviderId,
-      failedModelId,
-      allowRetry,
-    );
-  }
-
   private createFailedAssistantSnapshot(
     assistantMessage: ChatMessage,
   ): FailedAssistantSnapshot | null {
-    return this.paperChatTier.createFailedAssistantSnapshot(assistantMessage);
+    return this.failureTurnHandler.createFailedAssistantSnapshot(
+      assistantMessage,
+    );
   }
 
   private resetAssistantForRetry(assistantMessage: ChatMessage): void {
-    this.paperChatTier.resetAssistantForRetry(assistantMessage);
+    this.failureTurnHandler.resetAssistantForRetry(assistantMessage);
   }
 
   private async finalizeFailedAssistantMessage(
@@ -1675,30 +1453,10 @@ export class ChatManager {
     assistantMessage: ChatMessage,
     fallbackSnapshot: FailedAssistantSnapshot | null,
   ): Promise<boolean> {
-    return this.paperChatTier.finalizeFailedAssistantMessage(
+    return this.failureTurnHandler.finalizeFailedAssistantMessage(
       session,
       assistantMessage,
       fallbackSnapshot,
-    );
-  }
-
-  private async applyFailureStateSafely(
-    session: ChatSession,
-    userMessageId: string,
-    errorMessage: ChatMessage,
-    error: unknown,
-    failedProviderId: string,
-    failedModelId: string | null,
-    allowRetry: boolean = true,
-  ): Promise<void> {
-    return this.paperChatTier.applyFailureStateSafely(
-      session,
-      userMessageId,
-      errorMessage,
-      error,
-      failedProviderId,
-      failedModelId,
-      allowRetry,
     );
   }
 
@@ -1741,33 +1499,12 @@ export class ChatManager {
   ): Promise<boolean> {
     await this.init();
 
-    const requiredProviderManager = options.requiredProviderId
-      ? getProviderManager()
-      : null;
-    const requiredProvider = options.requiredProviderId
-      ? requiredProviderManager?.getProvider(options.requiredProviderId)
-      : null;
-
-    if (
-      options.requiredProviderId &&
-      (requiredProviderManager?.getActiveProviderId() !==
-        options.requiredProviderId ||
-        requiredProvider?.config.id !== options.requiredProviderId ||
-        !requiredProvider.isReady())
-    ) {
-      return false;
-    }
-
     if (
       options.presentationAuthorization &&
-      (!hasValidPresentationAuthorization(
+      !hasValidPresentationAuthorization(
         options.presentationAuthorization,
         options.item,
-      ) ||
-        options.requiredProviderId !== "paperchat" ||
-        !options.allowedToolNames ||
-        options.allowedToolNames.length !== 1 ||
-        options.allowedToolNames[0] !== "presentation")
+      )
     ) {
       return false;
     }
@@ -1824,17 +1561,13 @@ export class ChatManager {
       return false;
     }
     const sendingSession = options.targetSession || this.currentSession;
-    if (
-      this.activeSessionRunIds.has(sendingSession.id) ||
-      ((this.paperChatRerollSessions?.has(sendingSession.id) ?? false) &&
-        !options.fromPaperChatReroll)
-    ) {
+    if (this.activeSessionRunIds.has(sendingSession.id)) {
       this.onError?.(new Error(getString("chat-turn-in-progress")));
       return false;
     }
     if (sendingSession.userInputRequestState?.pendingRequests.length) {
       this.onError?.(
-        new Error("Please answer the pending PaperChat question first."),
+        new Error("Please answer the pending user-input question first."),
       );
       return false;
     }
@@ -1947,23 +1680,8 @@ export class ChatManager {
 
       // 获取活动的 AI 提供商
       const providerManager = getProviderManager();
-      if (
-        options.requiredProviderId &&
-        providerManager.getActiveProviderId() !== options.requiredProviderId
-      ) {
-        trackChatCompleted(false);
-        return false;
-      }
-      let provider = requiredProvider || this.getActiveProvider();
+      const provider = this.getActiveProvider();
       chatProviderId = providerManager.getActiveProviderId();
-      if (
-        options.requiredProviderId &&
-        (provider !== requiredProvider ||
-          provider?.config.id !== options.requiredProviderId)
-      ) {
-        trackChatCompleted(false);
-        return false;
-      }
       ztoolkit.log(
         "[ChatManager] provider:",
         provider?.getName(),
@@ -1971,25 +1689,8 @@ export class ChatManager {
         provider?.isReady(),
       );
 
-      if (
-        providerManager.getActiveProviderId() === "paperchat" &&
-        provider?.config.type === "paperchat"
-      ) {
-        const resolvedModelId =
-          await this.ensurePaperChatModelResolved(sendingSession);
-        provider = new PaperChatProvider({
-          ...provider.config,
-          resolvedModelOverride: resolvedModelId,
-          requestSessionId: sendingSession.id,
-        });
-      }
-
       if (!provider || !provider.isReady()) {
         ztoolkit.log("[ChatManager] Provider not ready, showing error in chat");
-        if (options.fromPaperChatReroll) {
-          trackChatCompleted(false);
-          return false;
-        }
         const errorMessage: ChatMessage = {
           id: this.generateId(),
           role: "assistant",
@@ -2120,7 +1821,7 @@ export class ChatManager {
         sendingSession.messages.push(userMessage);
         await this.sessionStorage.insertMessage(sendingSession.id, userMessage);
       }
-      clearPaperChatRetryableState(sendingSession);
+      clearRetryableFailureState(sendingSession);
       const reusedUserIndex = reusedUserMessage
         ? sendingSession.messages.findIndex(
             (message) => message.id === reusedUserMessage.id,
@@ -2320,7 +2021,6 @@ export class ChatManager {
           options.resumeFailedTurn === true,
           abortSignal,
           options.allowedToolNames,
-          options.allowPaperChatRetry !== false,
           options.noteSummaryContext,
           options.lockedToolItemKey,
           options.presentationAuthorization,
@@ -2332,14 +2032,6 @@ export class ChatManager {
         return true;
       }
 
-      let failedProviderId = provider.config.id;
-      let failedPaperChatModelId: string | null =
-        provider.config.type === "paperchat"
-          ? provider.config.resolvedModelOverride ||
-            sendingSession.resolvedModelId ||
-            null
-          : null;
-      let paperChatHardRerouteUsed = false;
       let latestFailedAssistantSnapshot: FailedAssistantSnapshot | null = null;
 
       const captureFailedAssistantSnapshot = () => {
@@ -2363,7 +2055,6 @@ export class ChatManager {
           async () => {
             const currentProvider = provider;
             chatProviderId = currentProvider.config.id;
-            failedProviderId = currentProvider.config.id;
 
             ensureSendingSessionTracked();
 
@@ -2484,7 +2175,7 @@ export class ChatManager {
                     assistantMessage.streamingState = undefined;
                     assistantMessage.timestamp = Date.now();
                     sendingSession.updatedAt = Date.now();
-                    clearPaperChatRetryableState(sendingSession);
+                    clearRetryableFailureState(sendingSession);
 
                     // Clean up empty reasoning
                     if (!assistantMessage.reasoning) {
@@ -2550,32 +2241,7 @@ export class ChatManager {
             } catch (error) {
               await checkpointQueue.catch(() => undefined);
               captureFailedAssistantSnapshot();
-              const reroute =
-                await this.paperChatRetry.reroutePaperChatSessionForHardFailure(
-                  {
-                    session: sendingSession,
-                    provider: currentProvider,
-                    error,
-                    failedModelId: failedPaperChatModelId,
-                    alreadyRerouted: paperChatHardRerouteUsed,
-                    reason: "streaming",
-                    ensureSessionTracked: ensureSendingSessionTracked,
-                  },
-                );
-              if (!reroute) {
-                throw error;
-              }
-
-              paperChatHardRerouteUsed = true;
-              failedPaperChatModelId = reroute.nextModel;
-              resetAssistantForAttempt();
-              try {
-                return await streamCurrentProvider();
-              } catch (reroutedError) {
-                await checkpointQueue.catch(() => undefined);
-                captureFailedAssistantSnapshot();
-                throw reroutedError;
-              }
+              throw error;
             }
           },
           this.createProviderRetryOptions(abortSignal),
@@ -2611,17 +2277,6 @@ export class ChatManager {
           content: getErrorMessage(error),
           timestamp: Date.now(),
         };
-
-        await this.applyFailureStateSafely(
-          sendingSession,
-          userMessage.id,
-          errorMessage,
-          error,
-          failedProviderId,
-          failedProviderId === "paperchat"
-            ? failedPaperChatModelId || sendingSession.resolvedModelId || null
-            : null,
-        );
 
         sendingSession.messages.push(errorMessage);
         await this.sessionStorage.insertMessage(
@@ -2671,7 +2326,6 @@ export class ChatManager {
     preserveToolExecutionState: boolean,
     abortSignal?: AbortSignal,
     allowedToolNames?: readonly string[],
-    allowPaperChatRetry: boolean = true,
     noteSummaryContext?: NoteSummaryContext,
     lockedToolItemKey?: string,
     presentationAuthorization?: PresentationLaunchAuthorization,
@@ -2821,29 +2475,9 @@ export class ChatManager {
     // Tool calling retries each failed model request in place so completed tool
     // results remain in currentMessages and are never executed a second time.
     const currentProvider = _provider as AIProvider & ToolCallingProvider;
-    const failedProviderId = currentProvider.config.id;
-    let failedPaperChatModelId: string | null =
-      currentProvider.config.type === "paperchat"
-        ? currentProvider.config.resolvedModelOverride ||
-          sendingSession.resolvedModelId ||
-          null
-        : null;
-    let paperChatHardRerouteUsed = false;
 
     try {
       onProviderUsed(currentProvider.config.id);
-      if (
-        currentProvider.config.id === "paperchat" &&
-        !failedPaperChatModelId
-      ) {
-        failedPaperChatModelId = await this.ensurePaperChatModelResolved(
-          sendingSession,
-          false,
-        );
-        currentProvider.updateConfig({
-          resolvedModelOverride: failedPaperChatModelId,
-        });
-      }
       ensureSendingSessionTracked();
 
       if (!preserveToolExecutionState) {
@@ -2886,10 +2520,7 @@ export class ChatManager {
         }
       };
       const syncModelSpecificRequestContext = () => {
-        const isDeepSeek = isDeepSeekToolPromptCacheTarget(
-          currentProvider,
-          failedPaperChatModelId || sendingSession.resolvedModelId,
-        );
+        const isDeepSeek = isDeepSeekToolPromptCacheTarget(currentProvider);
         const useStableDeepSeekCatalog = isDeepSeek && !searchScopeGateEnabled;
         const paperContextMessage = attemptMessagesWithContext.find(
           (message) => message.id === "paper-context",
@@ -2975,10 +2606,7 @@ export class ChatManager {
         },
       ) => {
         latestRuntimeState = runtimeState ?? latestRuntimeState;
-        return isDeepSeekToolPromptCacheTarget(
-          currentProvider,
-          failedPaperChatModelId || sendingSession.resolvedModelId,
-        ) &&
+        return isDeepSeekToolPromptCacheTarget(currentProvider) &&
           !searchScopeGateEnabled &&
           !noteSummaryContext
           ? null
@@ -2987,7 +2615,6 @@ export class ChatManager {
 
       const executeProviderRequest = async <T>(
         operation: () => Promise<T>,
-        onProviderRerouted?: () => void,
       ): Promise<T> => {
         const runOperationWithHostedSearchGuard = async (): Promise<T> => {
           ensureSendingSessionTracked();
@@ -3023,28 +2650,7 @@ export class ChatManager {
               ) {
                 throw error;
               }
-              const reroute =
-                await this.paperChatRetry.reroutePaperChatSessionForHardFailure(
-                  {
-                    session: sendingSession,
-                    provider: currentProvider,
-                    error,
-                    failedModelId: failedPaperChatModelId,
-                    alreadyRerouted: paperChatHardRerouteUsed,
-                    reason: "tool_calling",
-                    ensureSessionTracked: ensureSendingSessionTracked,
-                  },
-                );
-              if (!reroute) {
-                throw error;
-              }
-
-              paperChatHardRerouteUsed = true;
-              failedPaperChatModelId = reroute.nextModel;
-              refreshSearchToolsForCurrentModel();
-              syncModelSpecificRequestContext();
-              onProviderRerouted?.();
-              return runOperationWithHostedSearchGuard();
+              throw error;
             }
           },
           this.createProviderRetryOptions(abortSignal),
@@ -3129,17 +2735,6 @@ export class ChatManager {
         content: getErrorMessage(error),
         timestamp: Date.now(),
       };
-      await this.applyFailureStateSafely(
-        sendingSession,
-        messagesForApi.filter((m) => m.role === "user").at(-1)?.id || "",
-        errorMessage,
-        error,
-        failedProviderId,
-        failedProviderId === "paperchat"
-          ? failedPaperChatModelId || sendingSession.resolvedModelId || null
-          : null,
-        allowPaperChatRetry,
-      );
       sendingSession.messages.push(errorMessage);
       await this.sessionStorage.insertMessage(sendingSession.id, errorMessage);
       await this.sessionStorage.updateSessionMeta(sendingSession);
@@ -3391,7 +2986,7 @@ export class ChatManager {
       presentationAuthorization,
       presentationLaunchSession,
     });
-    clearPaperChatRetryableState(sendingSession);
+    clearRetryableFailureState(sendingSession);
     await this.sessionStorage.updateSessionMeta(sendingSession);
   }
 
@@ -3458,7 +3053,7 @@ export class ChatManager {
       presentationAuthorization,
       presentationLaunchSession,
     });
-    clearPaperChatRetryableState(sendingSession);
+    clearRetryableFailureState(sendingSession);
     await this.sessionStorage.updateSessionMeta(sendingSession);
   }
 
@@ -3696,7 +3291,7 @@ export class ChatManager {
         refreshed.toolExecutionState = undefined;
       }
     }
-    clearPaperChatRetryableState(refreshed);
+    clearRetryableFailureState(refreshed);
     refreshed.updatedAt = Date.now();
     await this.sessionStorage.updateSessionMeta(refreshed);
 
@@ -3771,7 +3366,7 @@ export class ChatManager {
 
   private toolApprovalCoordinator?: ToolApprovalCoordinator;
 
-  /** Lazy for the same Object.create-based white-box tests as paperChatTier. */
+  /** Lazy for the same Object.create-based white-box tests as approvals. */
   private get approvals(): ToolApprovalCoordinator {
     if (!this.toolApprovalCoordinator) {
       this.toolApprovalCoordinator = new ToolApprovalCoordinator({

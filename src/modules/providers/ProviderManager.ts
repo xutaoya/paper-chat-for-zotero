@@ -9,20 +9,14 @@ import type {
   ProviderStorageData,
   BuiltinProviderId,
   ApiKeyProviderConfig,
-  PaperChatProviderConfig,
   ModelInfo,
   FallbackConfig,
 } from "../../types/provider";
 import { OpenAICompatibleProvider } from "./OpenAICompatibleProvider";
 import { AnthropicProvider } from "./AnthropicProvider";
 import { GeminiProvider } from "./GeminiProvider";
-import { PaperChatProvider } from "./PaperChatProvider";
 import { config } from "../../../package.json";
 import { getPref } from "../../utils/prefs";
-import {
-  DEFAULT_PAPERCHAT_API_BASE_URL,
-  DEFAULT_PAPERCHAT_SITE_BASE_URL,
-} from "./PaperChatUrls";
 import {
   getProviderRetryBackoffDelayMs,
   isRetryableProviderError,
@@ -36,14 +30,6 @@ import { normalizeReasoningEffortPreference } from "./reasoning-request";
  * user-added entries, not hard-coded here.
  */
 export const BUILTIN_PROVIDERS: Record<BuiltinProviderId, ProviderMetadata> = {
-  paperchat: {
-    id: "paperchat",
-    name: "PaperChat",
-    description: "Login-based AI service with multi-model support",
-    defaultBaseUrl: DEFAULT_PAPERCHAT_API_BASE_URL,
-    website: DEFAULT_PAPERCHAT_SITE_BASE_URL,
-    type: "paperchat",
-  },
   openai: {
     id: "openai",
     name: "OpenAI",
@@ -322,10 +308,6 @@ export class ProviderManager {
     if (!config.isBuiltin || !(config.id in BUILTIN_PROVIDERS)) {
       return false;
     }
-    if (config.type === "paperchat") {
-      const cachedModels = getPref("paperchatModelsCache") as string;
-      return !cachedModels && (config.availableModels || []).length > 0;
-    }
     return (
       !config.apiKey.trim() &&
       (config.availableModels || []).some(
@@ -362,18 +344,11 @@ export class ProviderManager {
       ) {
         changed = true;
         const customModelIds = this.getCustomModelIds(provider);
-        if (provider.type === "paperchat") {
-          configs.push({
-            ...provider,
-            defaultModel: undefined,
-            availableModels: [],
-          } as PaperChatProviderConfig);
-          continue;
-        }
+        const defaultModel = provider.defaultModel ?? "";
         configs.push({
           ...provider,
-          defaultModel: customModelIds.includes(provider.defaultModel)
-            ? provider.defaultModel
+          defaultModel: customModelIds.includes(defaultModel)
+            ? defaultModel
             : customModelIds[0] || "",
           availableModels: customModelIds,
         } as ApiKeyProviderConfig);
@@ -381,7 +356,7 @@ export class ProviderManager {
       }
 
       if (
-        provider.type !== "paperchat" &&
+        provider.availableModels &&
         provider.availableModels.length > 0 &&
         (!provider.defaultModel ||
           !provider.availableModels.includes(provider.defaultModel))
@@ -394,17 +369,7 @@ export class ProviderManager {
         continue;
       }
 
-      if (provider.id !== "paperchat" || provider.type !== "paperchat") {
-        configs.push(provider);
-        continue;
-      }
-
-      const paperchat = { ...provider } as PaperChatProviderConfig;
-      if ("maxTokens" in paperchat) {
-        delete paperchat.maxTokens;
-        changed = true;
-      }
-      configs.push(paperchat);
+      configs.push(provider);
     }
 
     return { configs, changed };
@@ -431,8 +396,6 @@ export class ProviderManager {
    */
   private createProvider(config: ProviderConfig): AIProvider | null {
     switch (config.type) {
-      case "paperchat":
-        return new PaperChatProvider(config as PaperChatProviderConfig);
       case "anthropic":
         return new AnthropicProvider(config as ApiKeyProviderConfig);
       case "gemini":

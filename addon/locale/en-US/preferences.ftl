@@ -1,208 +1,227 @@
 pref-title = PaperMind Settings
 
-# Account Settings
-pref-account-settings = Account Settings
-pref-copy-btn = Copy
-pref-copied = Copied!
-pref-redeem-label = Token Redemption Code
-pref-redeem-placeholder =
-    .placeholder = Enter token redemption code
-pref-redeem-btn = Redeem
-pref-get-redeem-code = Buy Credits
-pref-get-redeem-code-title = Buy PaperChat Credits
-pref-get-redeem-code-link = Purchase Link
-pref-get-redeem-code-unavailable-prefix = Purchase is temporarily unavailable. Please
-pref-get-redeem-code-unavailable-link =  visit the official website
-pref-get-redeem-code-unavailable-suffix =  and contact support.
-pref-paperchat-select-plan = Select a plan
-pref-paperchat-buy-btn = Buy
-pref-paperchat-buy-loading = Processing...
-pref-paperchat-buy-waiting = Waiting...
-pref-paperchat-purchase-creating = Creating payment order...
-pref-paperchat-purchase-opened = Payment page opened. This window will update after payment.
-pref-paperchat-purchase-paid = Payment successful. Access has been refreshed.
-pref-paperchat-purchase-grant-failed = Payment succeeded, but access could not be granted. Please contact support.
-pref-paperchat-purchase-check-failed = Waiting for the payment result to sync. If you have paid, reopen this window later to check again.
-pref-paperchat-purchase-failed = Failed to create payment order. Please try again later.
-pref-paperchat-purchase-timeout = Payment has not been detected yet. Finish payment and reopen this window to check again.
-
-# API Settings
-pref-api-settings = API Settings
 pref-model = Model
-pref-model-placeholder =
-    .placeholder = gpt-4o
+
 pref-advanced-options = Advanced Options
+
 pref-max-tokens = Max Tokens
+
 pref-temperature = Temperature
+
 pref-system-prompt = System Prompt
-pref-system-prompt-placeholder =
-    .placeholder = You are a helpful research assistant...
+
 pref-extra-request-body = Extra Body
+
 pref-model-extra-request-body = Model Extra Body
+
 pref-extra-request-body-invalid = Extra request body must be a JSON object
+
 pref-model-extra-request-body-invalid = Per-model extra request body must be an object whose values are JSON objects
+
 pref-invalid-json = Invalid JSON
 
-# Provider Settings
 pref-providers = Providers
-pref-add-provider = + Add Custom
-pref-paperchat-title = PaperChat Service
-pref-paperchat-description = Built-in AI service with login-based access. Compared with managing your own API key, it is usually more convenient, stable, fast, and worry-free.
-pref-paperchat-notice-title = Announcement
-pref-paperchat-notice-expand = Expand announcement
-pref-paperchat-notice-collapse = Collapse announcement
-pref-paperchat-notice-debug-title = Notice Preview Debug
-pref-paperchat-notice-debug-description = Local preview only. Supports plain text, Markdown, and HTML. Click Apply Preview to override the current notice display, or Clear Preview to restore the remote notice.
-pref-paperchat-notice-debug-apply = Apply Preview
-pref-paperchat-notice-debug-clear = Clear Preview
-pref-paperchat-notice-debug-active = Local notice preview override is active
-pref-paperchat-baseurl-debug-title = PaperChat Base URL Debug
-pref-paperchat-baseurl-debug-description = Development only. Override the PaperChat service root, for example http://localhost:9002 or http://localhost:9002/v1. Applying this clears the current PaperChat login and cached models.
-pref-paperchat-baseurl-debug-apply = Apply URL
-pref-paperchat-baseurl-debug-clear = Restore Default
-pref-paperchat-baseurl-debug-active = PaperChat dev base URL is active: { $url }
-pref-paperchat-baseurl-debug-default = PaperChat is using the official service URL
-pref-paperchat-baseurl-debug-invalid = Enter a valid http:// or https:// URL
-pref-paperchat-tier = Tier
-pref-paperchat-tier-lite = Lite
-pref-paperchat-tier-standard = Standard
-pref-paperchat-tier-pro = Pro
-pref-paperchat-tier-ultra = Ultra
-pref-paperchat-lite-model = Lite Model
-pref-paperchat-standard-model = Standard Model
-pref-paperchat-pro-model = Pro Model
-pref-paperchat-ultra-model = Ultra Model
-pref-paperchat-model-auto = Auto
-pref-paperchat-model-auto-desc = Follow automatic tier routing
-pref-official-website = Visit Official Website
 
-# Provider Configuration
-pref-provider-enabled = Enabled
+pref-add-provider = + Add Custom
+
 pref-api-key = API Key
+
 pref-base-url = Base URL
+
 pref-show-key = Show
+
 pref-hide-key = Hide
+
 pref-refresh-models = Refresh
+
 pref-test-connection = Test Connection
+
 pref-delete-provider = Delete Provider
 
-# Active Provider
 pref-active-provider = Active Provider
+
 pref-current-provider = Current:
 
-# Test Results
 pref-testing = Testing...
+
 pref-test-success = Connection successful!
+
 pref-test-failed = Connection failed
+
 pref-provider-not-ready = Provider not configured
-pref-refresh-failed = Failed to refresh models
+
+pref-provider-configured = Configured
+
+pref-provider-active = Active provider
+
 pref-fetching-models = Fetching models...
+
 pref-models-loaded = Loaded { $count } models
+
 pref-fetch-models-failed = Failed to fetch models
 
-# Custom Provider
 pref-enter-provider-name = Enter provider name:
 
-# Model Management
 pref-model-list = Model List
+
 pref-add-model = + Add Model
+
 pref-enter-model-id = Enter model ID:
+
 pref-model-custom = Custom
+
 pref-model-speed-test = Speed
+
 pref-model-speed-testing = Testing...
+
 pref-model-speed-failed = Failed
+
 pref-model-speed-result = { $latency }ms
+
 pref-model-speed-unsupported = Speed test is not supported for this provider
+
 pref-model-exists = Model already exists
 
-# PDF Settings
 pref-pdf-settings = PDF Settings
+
 pref-upload-raw-pdf = Upload raw PDF on text extraction failure
+
 pref-upload-raw-pdf-desc = When enabled, uploads original PDF to AI if text extraction fails. This may consume significantly more tokens.
+
 pref-use-mineru-on-failure = Use MinerU when text extraction fails
-pref-use-mineru-on-failure-desc = When enabled, sends the PDF to the MinerU online API if Zotero cannot extract text.
+
 pref-mineru-api-token = MinerU Token
-pref-mineru-api-token-desc = API token created on mineru.net. Used for online PDF parsing when enabled.
+
 pref-mineru-test = Test Connection
+
 pref-mineru-test-running = Testing MinerU token…
-pref-mineru-test-success = MinerU token test succeeded
-pref-mineru-test-failed = MinerU token test failed
 
 pref-mineru-pane-title = MinerU Parsing
+
 pref-mineru-pane-desc = Configure the MinerU online API and manage the local parse cache.
+
 pref-mineru-cache-title = Manage Files
+
 pref-mineru-cache-library-root = My Library
+
 pref-mineru-cache-tags-title = Tags
+
 pref-mineru-cache-tags-summary = Tagged { $tagged }  Untagged { $untagged }
+
 pref-mineru-cache-tags-empty = No tags in the current scope
+
 pref-mineru-cache-tag-filter = Filter tags
     .placeholder = Filter tags
+
 pref-mineru-cache-search = Search items
     .placeholder = Search items
+
 pref-mineru-cache-summary = { $ready } / { $total }
+
 pref-mineru-cache-start-all = Start All
+
 pref-mineru-cache-start-selected = Parse Selected
+
 pref-mineru-cache-start-selected-none = Select items to parse first
+
 pref-mineru-cache-repair = Repair Cache
+
 pref-mineru-cache-delete-all = Delete All Cache
+
 pref-mineru-cache-refresh = Refresh
+
 pref-mineru-cache-empty = No PDFs in the current scope
+
 pref-mineru-cache-col-status = Status
+
 pref-mineru-cache-col-title = Title
+
 pref-mineru-cache-col-author = Author
+
 pref-mineru-cache-col-year = Year
+
 pref-mineru-cache-col-date-added = Date Added
+
 pref-mineru-cache-delete-one = Delete
+
 pref-mineru-cache-status-ready = Cached
+
 pref-mineru-cache-status-failed = Failed
+
 pref-mineru-cache-status-stale = Stale
+
 pref-mineru-cache-status-missing = Missing
+
 pref-mineru-cache-status-uncached = Not Parsed
+
 pref-mineru-cache-repair-done = Removed { $count } invalid cache entries
+
 pref-mineru-cache-delete-all-done = Deleted all MinerU cache entries
+
 pref-mineru-cache-start-none = No PDFs need pre-parsing
+
 pref-mineru-cache-start-progress = Parsing { $current } / { $total }: { $title }
+
 pref-mineru-cache-start-done = Pre-parse finished: { $success } succeeded, { $failed } failed
+
 pref-mineru-open-settings-hint = MinerU token, connection test, and cache management are now in the separate MinerU settings page.
 
-# AI Tools Settings
 pref-ai-tools-settings = AI Tools Settings
-pref-agent-max-planning-iterations = Max planning iterations
-pref-agent-max-planning-iterations-desc = Maximum planning iterations allowed inside a single agent response. On the final iteration, tool use is disabled and the model must synthesize a final answer.
-pref-context-auto-compact-threshold = Context compression
-pref-context-auto-compact-threshold-desc = Compresses conversation context when estimated input reaches the selected context-window budget. The trigger still reserves output tokens and the safety buffer.
-pref-tool-permission-defaults = Default Approval Policy
-pref-tool-permission-defaults-desc = Controls the default behavior for risky tool classes. Read-only tools remain auto-allowed.
-pref-tool-permission-network = Network tools
-pref-tool-permission-write = Write tools
-pref-tool-permission-memory = Memory tools
-pref-tool-permission-high-cost = High-cost tools
-pref-tool-permission-mode-auto-allow = Auto allow
-pref-tool-permission-mode-ask = Ask every time
-pref-tool-permission-mode-deny = Always deny
 
-# Paper Skills Settings
+pref-agent-max-planning-iterations = Max planning iterations
+
+pref-agent-max-planning-iterations-desc = Maximum planning iterations allowed inside a single agent response. On the final iteration, tool use is disabled and the model must synthesize a final answer.
+
+pref-context-auto-compact-threshold = Context compression
+
+pref-context-auto-compact-threshold-desc = Compresses conversation context when estimated input reaches the selected context-window budget. The trigger still reserves output tokens and the safety buffer.
+
+pref-tool-permission-defaults = Default Approval Policy
+
+pref-tool-permission-defaults-desc = Controls the default behavior for risky tool classes. Read-only tools remain auto-allowed.
+
+pref-tool-permission-network = Network tools
+
+pref-tool-permission-write = Write tools
+
+pref-tool-permission-memory = Memory tools
+
+pref-tool-permission-high-cost = High-cost tools
+
 pref-paper-skills-settings = Paper Skills
+
 pref-paper-skills-desc = Add or override local skills under paper-chat/skills/<slug>/SKILL.md in the data directory. Click Reload Skills after editing to refresh them.
+
 pref-paper-skills-open-folder = Open Skills Folder
+
 pref-paper-skills-reload = Reload Skills
+
 pref-paper-skills-reloaded = Reloaded { $count } skills
+
 pref-paper-skills-open-failed = Failed to open skills folder
+
 pref-paper-skills-reload-failed = Failed to reload skills
 
-# AISummary Settings
 pref-aisummary-settings = AI Summary
+
 pref-aisummary-auto-generate-on-item-add =
     .label = Automatically generate AI summaries for newly added papers
+
 pref-aisummary-template = Template
+
 pref-aisummary-include-annotations =
     .label = Include user highlights and notes
+
 pref-aisummary-run-now = Generate Summaries
+
 pref-aisummary-desc = Generate AI summaries for unprocessed papers in your library (up to 10 per run).
 
-pref-embedding-status-paperchat = Using PaperChat Embedding ({ $model })
 pref-embedding-status-gemini = Using Gemini Embedding (Free)
+
 pref-embedding-status-ollama = Using Ollama Local Embedding
+
 pref-embedding-status-openai = Using OpenAI Embedding
+
 pref-embedding-unavailable-ollama = Ollama is running but no embedding model installed. Run: ollama pull nomic-embed-text
-pref-embedding-unavailable-none = No embedding service available. Use the PaperChat provider or configure Gemini/OpenAI API Key.
+
+pref-embedding-unavailable-none = No embedding service available. Configure Gemini or OpenAI API Key in Settings.

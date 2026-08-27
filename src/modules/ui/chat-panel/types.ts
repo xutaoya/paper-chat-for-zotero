@@ -9,7 +9,6 @@ import type {
   QuotedMessageRef,
 } from "../../chat";
 import type { AuthManager } from "../../auth";
-import type { PaperChatTier } from "../../providers/paperchat-tier-routing";
 
 // Theme colors interface
 export interface ThemeColors {
@@ -99,11 +98,6 @@ export interface ChatPanelContext {
   renderExecutionPlan: (plan?: ExecutionPlan) => void;
   appendError: (errorMessage: string) => void;
   appendSuccess: (message: string) => void;
-  rerollPaperChatTierForCurrentSession: () => Promise<{
-    previousModel: string;
-    nextModel: string;
-    tier: PaperChatTier;
-  } | null>;
   // Callbacks reference for multi-doc selector
   callbacks?: {
     onMessageUpdate?: (messages: ChatMessage[]) => void;

@@ -294,15 +294,7 @@ import {
   copyToClipboard,
 } from "./ChatPanelBuilder";
 import { getString } from "../../../utils/locale";
-import {
-  getPaperChatErrorDisplayMessage,
-  parsePaperChatQuotaError,
-} from "../../providers/paperchat-errors";
 import { darkTheme } from "./ChatPanelTheme";
-import {
-  getAnalyticsService,
-  trackPaperChatPurchaseEntryClicked,
-} from "../../analytics";
 
 const RECOVERY_STEP_PREFIX = "replan:";
 
@@ -544,67 +536,14 @@ export interface ApprovalViewTransitionState {
   nextPendingCount: number;
 }
 
-function createTopupButton(doc: Document): HTMLElement {
-  const btn = createElement(
-    doc,
-    "button",
-    {
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      marginTop: "12px",
-      marginLeft: "auto",
-      marginRight: "auto",
-      padding: "7px 12px",
-      borderRadius: "8px",
-      border: "1px solid #f59e0b",
-      background:
-        "linear-gradient(135deg, rgba(255, 244, 214, 0.98), rgba(255, 223, 128, 0.98))",
-      color: "#7c3e00",
-      fontSize: "12px",
-      fontWeight: "700",
-      lineHeight: "1.2",
-      textAlign: "center",
-      cursor: "pointer",
-      boxShadow: "0 2px 8px rgba(245, 158, 11, 0.2)",
-    },
-    { class: "paperchat-topup-btn" },
-  );
-
-  btn.setAttribute("type", "button");
-  btn.textContent = getString("chat-error-paperchat-topup-action");
-  btn.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    trackPaperChatPurchaseEntryClicked(
-      getAnalyticsService(),
-      "quota_error_card",
-    );
-    void import("../../preferences/UserAuthUI")
-      .then((module) => module.openPaperChatSettingsForTopup())
-      .catch((error) => {
-        ztoolkit.log(
-          "[Chat] Failed to open PaperChat settings for topup:",
-          error,
-        );
-        Zotero.Utilities.Internal.openPreferences("paperchat-prefpane");
-      });
-  });
-  return btn;
-}
-
 function getErrorDisplayDetails(msg: ChatMessage): {
   display: string;
   raw: string;
-  quota: ReturnType<typeof parsePaperChatQuotaError>;
 } {
-  const quota = parsePaperChatQuotaError(msg.content);
-  const display =
-    quota?.displayMessage || getPaperChatErrorDisplayMessage(msg.content);
+  const display = msg.content;
   return {
     display,
-    raw: quota?.rawMessage || display,
-    quota,
+    raw: display,
   };
 }
 
@@ -640,9 +579,6 @@ function createInterruptedFooter(
     footer.setAttribute("data-attached-error-id", attachedError.id);
     status.textContent = `⚠️ ${details.display}`;
     footer.appendChild(status);
-    if (details.quota) {
-      footer.appendChild(createTopupButton(doc));
-    }
     return footer;
   }
 
@@ -931,7 +867,6 @@ export function createMessageElement(
 
   // Store raw content for copying
   let rawContent = msg.content;
-  let quotaDetails: ReturnType<typeof parsePaperChatQuotaError> = null;
 
   if (msg.role === "user") {
     // Format user message for display
@@ -946,7 +881,6 @@ export function createMessageElement(
     // 错误消息显示为纯文本，带警告图标
     // 尝试解析 JSON 错误消息以获取更友好的显示
     const details = getErrorDisplayDetails(msg);
-    quotaDetails = details.quota;
     content.textContent = `⚠️ ${details.display}`;
     rawContent = details.raw;
   } else {
@@ -1061,10 +995,6 @@ export function createMessageElement(
     );
   }
 
-  if (quotaDetails) {
-    bubble.appendChild(createTopupButton(doc));
-  }
-
   wrapper.appendChild(bubble);
 
   const actions = createMessageActions(
@@ -1072,7 +1002,7 @@ export function createMessageElement(
     theme,
     msg,
     rawContent,
-    showReroll && !quotaDetails,
+    showReroll,
     renderOptions.onRetry,
     renderOptions.onRetryError,
     onReroll,
@@ -1676,9 +1606,6 @@ export function renderMessages(
       attachedNotices,
     } = presentations[index];
     const isLastAssistant = index === lastAssistantIndex;
-    const attachedQuota = attachedError
-      ? parsePaperChatQuotaError(attachedError.content)
-      : null;
     fragment.appendChild(
       createMessageElement(
         doc,
@@ -1686,9 +1613,7 @@ export function renderMessages(
         theme,
         isLastAssistant,
         (msg.role === "error" && retryableErrorMessageId === msg.id) ||
-          (!!attachedError &&
-            retryableErrorMessageId === attachedError.id &&
-            !attachedQuota),
+          (!!attachedError && retryableErrorMessageId === attachedError.id),
         onReroll,
         onRerollError,
         renderOptions,

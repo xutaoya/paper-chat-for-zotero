@@ -206,7 +206,7 @@ export abstract class BaseProvider implements AIProvider {
   }
 
   protected shouldMarkPromptCacheCheckpoint(): boolean {
-    return this._config.id === "paperchat";
+    return false;
   }
 
   private isPromptCacheCheckpointMessage(msg: ChatMessage): boolean {

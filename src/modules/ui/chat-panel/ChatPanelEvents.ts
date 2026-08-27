@@ -21,29 +21,12 @@ import {
   setupClickOutsideHandler,
   toggleHistoryDropdown,
 } from "./HistoryDropdown";
-import { showAuthDialog } from "../AuthDialog";
 import { getString } from "../../../utils/locale";
 import { getProviderManager } from "../../providers";
-import type { PaperChatProviderConfig } from "../../../types/provider";
-import type { SubscriptionUsageSummary } from "../../../types/auth";
 import { getPref, setPref } from "../../../utils/prefs";
 import {
   formatModelLabel,
-  getModelRatios,
-  getModelRoutingMeta,
 } from "../../preferences/ModelsFetcher";
-import {
-  PAPERCHAT_TIERS,
-  deriveTierPools,
-  getAvailablePaperChatTiers,
-  parseTierState,
-  type PaperChatTier,
-} from "../../providers/paperchat-tier-routing";
-import {
-  REASONING_EFFORT_OPTIONS,
-  normalizeReasoningEffortPreference,
-  type ReasoningEffortPreference,
-} from "../../providers/reasoning-request";
 import { getChatManager, type PanelMode } from "./ChatPanelManager";
 import { startReaderFigureScreenshot } from "../ReaderFigureScreenshot";
 import {
@@ -67,14 +50,7 @@ import {
   ANALYTICS_EVENTS,
   getAnalyticsService,
   trackPaperChatPresentationEntryClicked,
-  trackPaperChatPurchaseEntryClicked,
 } from "../../analytics";
-import { buildErrorProps } from "../../analytics/errorProps";
-import { LOW_BALANCE_WARNING_THRESHOLD } from "../../preferences/UserAuthUI";
-import {
-  extractStatusCode,
-  isNetworkErrorMessage,
-} from "../../analytics/errorClassify";
 import {
   hasConversationMessages,
   shouldResetSummaryButtonBusyState,
@@ -100,55 +76,6 @@ let togglePanelModeFn: (() => void) | null = null;
 
 const conversationSummaryRuns = new WeakMap<HTMLButtonElement, symbol>();
 let queuedTurnSequence = 0;
-
-// Duration (ms) to show the "+quota" flash on the check-in button after a successful check-in
-const CHECKIN_FLASH_DURATION_MS = 5000;
-
-function resetUserBalanceLowBalanceStyles(userBalanceEl: HTMLElement): void {
-  userBalanceEl.style.color = "";
-  userBalanceEl.style.fontWeight = "";
-  userBalanceEl.style.textDecoration = "";
-  userBalanceEl.style.textUnderlineOffset = "";
-  userBalanceEl.style.cursor = "";
-  userBalanceEl.style.opacity = "0.9";
-  userBalanceEl.removeAttribute("role");
-  userBalanceEl.removeAttribute("tabindex");
-  userBalanceEl.removeAttribute("data-low-balance-clickable");
-}
-
-function applyUserBalanceLowBalanceStyles(userBalanceEl: HTMLElement): void {
-  userBalanceEl.style.color = "#dc2626";
-  userBalanceEl.style.fontWeight = "700";
-  userBalanceEl.style.textDecoration = "underline";
-  userBalanceEl.style.textUnderlineOffset = "2px";
-  userBalanceEl.style.cursor = "pointer";
-  userBalanceEl.style.opacity = "1";
-  userBalanceEl.setAttribute("role", "button");
-  userBalanceEl.setAttribute("tabindex", "0");
-  userBalanceEl.setAttribute("data-low-balance-clickable", "true");
-}
-
-function resetSubscriptionLimitStyles(subscriptionEl: HTMLElement): void {
-  subscriptionEl.style.color = "";
-  subscriptionEl.style.fontWeight = "";
-  subscriptionEl.style.textDecoration = "";
-  subscriptionEl.style.textUnderlineOffset = "";
-  subscriptionEl.style.cursor = "";
-  subscriptionEl.removeAttribute("role");
-  subscriptionEl.removeAttribute("tabindex");
-  subscriptionEl.removeAttribute("data-subscription-limit-clickable");
-}
-
-function applySubscriptionLimitStyles(subscriptionEl: HTMLElement): void {
-  subscriptionEl.style.color = "#dc2626";
-  subscriptionEl.style.fontWeight = "700";
-  subscriptionEl.style.textDecoration = "underline";
-  subscriptionEl.style.textUnderlineOffset = "2px";
-  subscriptionEl.style.cursor = "pointer";
-  subscriptionEl.setAttribute("role", "button");
-  subscriptionEl.setAttribute("tabindex", "0");
-  subscriptionEl.setAttribute("data-subscription-limit-clickable", "true");
-}
 const MESSAGE_INPUT_MIN_HEIGHT = 60;
 const MESSAGE_INPUT_MAX_HEIGHT = 140;
 const CHAT_HISTORY_BOTTOM_STICKY_THRESHOLD = 24;
@@ -225,255 +152,6 @@ export function syncSessionNavigationState(
 
 function trackChatModelSwitched(props: Record<string, string | boolean>): void {
   getAnalyticsService().track(ANALYTICS_EVENTS.chatModelSwitched, props);
-}
-
-function mapSignInReason(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error || "");
-  const normalized = message.toLowerCase();
-  const status = extractStatusCode(message);
-
-  if (status !== null && status >= 500) {
-    return "server_error";
-  }
-  if (isNetworkErrorMessage(message) && status === null) {
-    return "network_error";
-  }
-  if (
-    normalized.includes("今天已签到") ||
-    normalized.includes("already checked in") ||
-    normalized.includes("already signed in")
-  ) {
-    return "already_signed_in";
-  }
-  if (
-    normalized.includes("未登录") ||
-    normalized.includes("unauthorized") ||
-    normalized.includes("not authenticated") ||
-    normalized.includes("无权")
-  ) {
-    return "not_authenticated";
-  }
-  if (
-    normalized.includes("rate limit") ||
-    normalized.includes("too many") ||
-    normalized.includes("429") ||
-    normalized.includes("频繁") ||
-    normalized.includes("稍后再试")
-  ) {
-    return "rate_limited";
-  }
-
-  return "unknown";
-}
-
-function getPaperChatTierLabel(tier: PaperChatTier): string {
-  if (tier === "paperchat-lite") {
-    return getString("chat-tier-lite");
-  }
-
-  if (tier === "paperchat-pro") {
-    return getString("chat-tier-pro");
-  }
-
-  if (tier === "paperchat-ultra") {
-    return getString("chat-tier-ultra");
-  }
-
-  return getString("chat-tier-standard");
-}
-
-function isHighConsumptionPaperChatTier(tier: PaperChatTier): boolean {
-  return tier === "paperchat-pro" || tier === "paperchat-ultra";
-}
-
-function getPaperChatTierRank(tier: PaperChatTier): number {
-  return PAPERCHAT_TIERS.indexOf(tier);
-}
-
-function getPaperChatTierDropdownLabel(tier: PaperChatTier): string {
-  const label = getPaperChatTierLabel(tier);
-  if (tier === "paperchat-pro") {
-    return `${label} · ${getString("chat-tier-high-consumption")}`;
-  }
-  if (tier === "paperchat-ultra") {
-    return `${label} · ${getString("chat-tier-very-high-consumption")}`;
-  }
-  return label;
-}
-
-function shouldWarnForPaperChatTierSwitch(
-  currentTier: PaperChatTier,
-  nextTier: PaperChatTier,
-): boolean {
-  return (
-    getPaperChatTierRank(nextTier) > getPaperChatTierRank(currentTier) &&
-    isHighConsumptionPaperChatTier(nextTier) &&
-    getPref("paperchatSuppressHighTierWarning") !== true
-  );
-}
-
-function confirmHighConsumptionTierSwitch(
-  doc: Document,
-  tier: PaperChatTier,
-): Promise<boolean> {
-  const theme = getCurrentTheme();
-
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (confirmed: boolean, dontShowAgain = checkbox.checked) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (dontShowAgain) {
-        setPref("paperchatSuppressHighTierWarning", true);
-      }
-      overlay.remove();
-      resolve(confirmed);
-    };
-
-    const overlay = createElement(doc, "div", {
-      position: "fixed",
-      inset: "0",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "20px",
-      background: "rgba(0,0,0,0.38)",
-      zIndex: "10020",
-      boxSizing: "border-box",
-    });
-
-    const dialog = createElement(doc, "div", {
-      width: "min(360px, 100%)",
-      padding: "18px",
-      borderRadius: "8px",
-      border: `1px solid ${theme.borderColor}`,
-      background: theme.dropdownBg,
-      color: theme.textPrimary,
-      boxShadow: "0 16px 44px rgba(0,0,0,0.3)",
-      boxSizing: "border-box",
-    });
-
-    const title = createElement(doc, "div", {
-      fontSize: "15px",
-      fontWeight: "700",
-      lineHeight: "20px",
-      marginBottom: "8px",
-    });
-    title.textContent =
-      tier === "paperchat-ultra"
-        ? getString("chat-very-high-tier-warning-title")
-        : getString("chat-high-tier-warning-title");
-
-    const message = createElement(doc, "div", {
-      fontSize: "13px",
-      lineHeight: "20px",
-      color: theme.textSecondary,
-      marginBottom: "14px",
-    });
-    message.textContent = getString("chat-high-tier-warning-message");
-
-    const checkboxRow = createElement(doc, "label", {
-      display: "flex",
-      alignItems: "center",
-      gap: "8px",
-      fontSize: "12px",
-      lineHeight: "16px",
-      color: theme.textSecondary,
-      marginBottom: "16px",
-      cursor: "pointer",
-      userSelect: "none",
-    });
-    const checkbox = createElement(doc, "input", {
-      margin: "0",
-    }) as HTMLInputElement;
-    checkbox.type = "checkbox";
-    checkboxRow.appendChild(checkbox);
-    const checkboxLabel = createElement(doc, "span", {});
-    checkboxLabel.textContent = getString("chat-high-tier-warning-dont-show");
-    checkboxRow.appendChild(checkboxLabel);
-
-    const actions = createElement(doc, "div", {
-      display: "flex",
-      justifyContent: "flex-end",
-      gap: "8px",
-    });
-
-    const cancelBtn = createElement(doc, "button", {
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      minWidth: "72px",
-      height: "32px",
-      padding: "0 12px",
-      borderRadius: "6px",
-      border: `1px solid ${theme.inputBorderColor}`,
-      background: theme.buttonBg,
-      color: theme.textPrimary,
-      cursor: "pointer",
-      fontSize: "12px",
-      lineHeight: "16px",
-      boxSizing: "border-box",
-    }) as HTMLButtonElement;
-    cancelBtn.type = "button";
-    cancelBtn.textContent = getString("chat-high-tier-warning-cancel");
-
-    const confirmBtn = createElement(doc, "button", {
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      minWidth: "88px",
-      height: "32px",
-      padding: "0 12px",
-      borderRadius: "6px",
-      border: "none",
-      background: theme.userBubbleBg,
-      color: theme.userBubbleText,
-      cursor: "pointer",
-      fontSize: "12px",
-      lineHeight: "16px",
-      fontWeight: "600",
-      boxSizing: "border-box",
-    }) as HTMLButtonElement;
-    confirmBtn.type = "button";
-    confirmBtn.textContent = getString("chat-high-tier-warning-confirm");
-
-    cancelBtn.addEventListener("click", () => finish(false));
-    confirmBtn.addEventListener("click", () => finish(true));
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) {
-        finish(false);
-      }
-    });
-
-    actions.appendChild(cancelBtn);
-    actions.appendChild(confirmBtn);
-    dialog.appendChild(title);
-    dialog.appendChild(message);
-    dialog.appendChild(checkboxRow);
-    dialog.appendChild(actions);
-    overlay.appendChild(dialog);
-    const mountNode = doc.body ?? doc.documentElement;
-    if (!mountNode) {
-      resolve(false);
-      return;
-    }
-    mountNode.appendChild(overlay);
-    confirmBtn.focus();
-  });
-}
-
-function setCheckinButtonReadyState(button: HTMLButtonElement): void {
-  button.textContent = getString("user-checkin-btn");
-  button.disabled = false;
-}
-
-function setCheckinButtonCheckedInState(button: HTMLButtonElement): void {
-  button.textContent = getString("user-checked-in");
-  button.disabled = true;
-  button.style.opacity = "0.65";
-  button.style.cursor = "default";
 }
 
 function focusTextarea(input: HTMLTextAreaElement | null | undefined): void {
@@ -595,38 +273,12 @@ function getActiveReaderItem(): Zotero.Item | null {
  */
 export async function refreshCheckinDisplay(
   container: HTMLElement,
-  authManager: {
-    fetchCheckinStatus(): Promise<{
-      success: boolean;
-      enabled: boolean;
-      checkedInToday: boolean;
-      checkinCount: number;
-    }>;
-  },
 ): Promise<void> {
   const checkinBtn = container.querySelector(
     "#chat-checkin-btn",
   ) as HTMLButtonElement | null;
-  if (!checkinBtn) return;
-
-  const result = await authManager.fetchCheckinStatus();
-  if (!result.success || !result.enabled) {
+  if (checkinBtn) {
     checkinBtn.style.display = "none";
-    return;
-  }
-
-  checkinBtn.style.display = "inline-flex";
-
-  if (result.checkedInToday) {
-    checkinBtn.textContent = getString("user-checked-in");
-    checkinBtn.disabled = true;
-    checkinBtn.style.opacity = "0.65";
-    checkinBtn.style.cursor = "default";
-  } else {
-    checkinBtn.textContent = getString("user-checkin-btn");
-    checkinBtn.disabled = false;
-    checkinBtn.style.opacity = "1";
-    checkinBtn.style.cursor = "pointer";
   }
 }
 
@@ -675,7 +327,7 @@ export function createPresentationButtonLaunchHandler(
  * Setup all event handlers for the chat panel
  */
 export function setupEventHandlers(context: ChatPanelContext): () => void {
-  const { container, chatManager, authManager } = context;
+  const { container, chatManager } = context;
 
   // Disposers for listeners attached to long-lived targets (document/window).
   // Element-scoped listeners are freed with their nodes, but listeners on the
@@ -684,12 +336,7 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
   const disposers: Array<() => void> = [];
 
   const openPluginPreferencesSafely = (): void => {
-    void import("../../preferences/UserAuthUI")
-      .then((module) => module.openPaperChatPreferences())
-      .catch((error) => {
-        ztoolkit.log("[Chat] Failed to open PaperChat preferences:", error);
-        Zotero.Utilities.Internal.openPreferences("paperchat-prefpane");
-      });
+    Zotero.Utilities.Internal.openPreferences("paperchat-prefpane");
   };
 
   // Get DOM elements
@@ -724,12 +371,6 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
   const attachmentsPreview = container.querySelector(
     "#chat-attachments-preview",
   ) as HTMLElement;
-  const userActionBtn = container.querySelector(
-    "#chat-user-action-btn",
-  ) as HTMLButtonElement;
-  const checkinBtn = container.querySelector(
-    "#chat-checkin-btn",
-  ) as HTMLButtonElement;
   const chatHistory = container.querySelector(
     "#chat-history",
   ) as HTMLElement | null;
@@ -1052,92 +693,6 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
       },
     );
   }
-
-  // Check-in button
-  checkinBtn?.addEventListener("click", async () => {
-    if (checkinBtn.disabled) return;
-    checkinBtn.disabled = true;
-    checkinBtn.textContent = "...";
-
-    let result;
-    try {
-      result = await authManager.doCheckin();
-    } catch (error) {
-      getAnalyticsService().track(ANALYTICS_EVENTS.signInCompleted, {
-        success: false,
-        ...buildErrorProps(mapSignInReason(error), error),
-      });
-      setCheckinButtonReadyState(checkinBtn);
-      return;
-    }
-
-    if (result.success) {
-      const rewardCount = result.quotaAwarded || undefined;
-      getAnalyticsService().track(ANALYTICS_EVENTS.signInCompleted, {
-        success: true,
-        ...(rewardCount !== undefined ? { reward_count: rewardCount } : {}),
-      });
-
-      try {
-        await authManager.refreshUserInfo();
-        updateUserBarDisplay(container, authManager);
-      } catch (error) {
-        ztoolkit.log(
-          "[ChatPanel] Failed to refresh balance after check-in:",
-          error,
-        );
-      }
-
-      // Flash "+quota" for 5 s, then settle into the checked-in state
-      if (result.quotaAwarded) {
-        checkinBtn.textContent = `+${result.quotaAwarded}`;
-        setTimeout(() => {
-          void refreshCheckinDisplay(container, authManager).catch((error) => {
-            ztoolkit.log(
-              "[ChatPanel] Failed to refresh check-in state:",
-              error,
-            );
-            setCheckinButtonCheckedInState(checkinBtn);
-          });
-        }, CHECKIN_FLASH_DURATION_MS);
-      } else {
-        try {
-          await refreshCheckinDisplay(container, authManager);
-        } catch (error) {
-          ztoolkit.log("[ChatPanel] Failed to refresh check-in state:", error);
-          setCheckinButtonCheckedInState(checkinBtn);
-        }
-      }
-      return;
-    }
-
-    const reason = mapSignInReason(result.message);
-    getAnalyticsService().track(ANALYTICS_EVENTS.signInCompleted, {
-      success: false,
-      ...buildErrorProps(reason, result.message),
-    });
-    setCheckinButtonReadyState(checkinBtn);
-  });
-
-  // Fetch check-in status on init if already logged in
-  if (authManager.isLoggedIn()) {
-    refreshCheckinDisplay(container, authManager);
-  }
-
-  // User action button - login/logout
-  userActionBtn?.addEventListener("click", async () => {
-    ztoolkit.log("User action button clicked");
-    if (authManager.isLoggedIn()) {
-      await authManager.logout();
-      context.updateUserBar();
-    } else {
-      const success = await showAuthDialog("login");
-      if (success) {
-        context.updateUserBar();
-        refreshCheckinDisplay(container, authManager);
-      }
-    }
-  });
 
   // Send button
   sendButton?.addEventListener("click", async () => {
@@ -1618,78 +1173,6 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
     });
     userBarSettingsBtn.addEventListener("mouseleave", () => {
       userBarSettingsBtn.style.background = "rgba(255, 255, 255, 0.15)";
-    });
-  }
-
-  const userBalanceEl = container.querySelector(
-    "#chat-user-balance",
-  ) as HTMLElement;
-  if (userBalanceEl) {
-    const openLowBalanceTopup = () => {
-      if (userBalanceEl.getAttribute("data-low-balance-clickable") !== "true") {
-        return;
-      }
-      getAnalyticsService().track(ANALYTICS_EVENTS.paperChatLowBalanceClicked, {
-        source: "chat_user_bar_balance",
-        low_balance: true,
-      });
-      trackPaperChatPurchaseEntryClicked(
-        getAnalyticsService(),
-        "chat_user_bar_balance",
-        { low_balance: true },
-      );
-      void import("../../preferences/UserAuthUI")
-        .then((module) => module.openPaperChatSettingsForTopup())
-        .catch((error) => {
-          ztoolkit.log(
-            "[Chat] Failed to open PaperChat settings for low balance:",
-            error,
-          );
-          Zotero.Utilities.Internal.openPreferences("paperchat-prefpane");
-        });
-    };
-    userBalanceEl.addEventListener("click", openLowBalanceTopup);
-    userBalanceEl.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") {
-        return;
-      }
-      event.preventDefault();
-      openLowBalanceTopup();
-    });
-  }
-
-  const userSubscriptionEl = container.querySelector(
-    "#chat-user-subscription",
-  ) as HTMLElement;
-  if (userSubscriptionEl) {
-    const openSubscriptionTopup = () => {
-      if (
-        userSubscriptionEl.getAttribute("data-subscription-limit-clickable") !==
-        "true"
-      ) {
-        return;
-      }
-      trackPaperChatPurchaseEntryClicked(
-        getAnalyticsService(),
-        "chat_user_bar_subscription",
-      );
-      void import("../../preferences/UserAuthUI")
-        .then((module) => module.openPaperChatSettingsForTopup())
-        .catch((error) => {
-          ztoolkit.log(
-            "[Chat] Failed to open PaperChat settings for subscription limit:",
-            error,
-          );
-          Zotero.Utilities.Internal.openPreferences("paperchat-prefpane");
-        });
-    };
-    userSubscriptionEl.addEventListener("click", openSubscriptionTopup);
-    userSubscriptionEl.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") {
-        return;
-      }
-      event.preventDefault();
-      openSubscriptionTopup();
     });
   }
 
@@ -2206,7 +1689,7 @@ async function sendMessage(
   _attachmentsPreview: HTMLElement | null,
   presetContent?: string,
 ): Promise<void> {
-  const { chatManager, authManager } = context;
+  const { chatManager } = context;
   const chatHistory = context.container.querySelector(
     "#chat-history",
   ) as HTMLElement | null;
@@ -2234,58 +1717,7 @@ async function sendMessage(
     const activeProviderId = providerManager.getActiveProviderId();
     const activeProvider = providerManager.getActiveProvider();
 
-    if (activeProviderId === "paperchat") {
-      // For PaperChat, prompt login if not logged in
-      if (!authManager.isLoggedIn()) {
-        const success = await showAuthDialog("login");
-        if (!success) {
-          return;
-        }
-        context.updateUserBar();
-      }
-      // After login, ensure API key is available
-      if (!activeProvider?.isReady()) {
-        // Try to refresh the plugin token
-        await authManager.ensurePluginToken(true);
-        if (!activeProvider?.isReady()) {
-          ztoolkit.log(
-            "PaperChat provider still not ready after token refresh, forcing logout",
-          );
-          // Session is invalid and auto-relogin failed, force logout
-          await authManager.logout();
-          context.updateUserBar();
-          // Show error in chat
-          try {
-            await chatManager.showErrorMessage(
-              getString("chat-error-session-expired"),
-            );
-          } catch (error) {
-            context.appendError(
-              error instanceof Error ? error.message : String(error),
-            );
-          }
-          // Prompt login again
-          const success = await showAuthDialog("login");
-          if (!success) {
-            return;
-          }
-          context.updateUserBar();
-          // Check again after re-login
-          if (!activeProvider?.isReady()) {
-            try {
-              await chatManager.showErrorMessage(
-                getString("chat-error-no-provider"),
-              );
-            } catch (error) {
-              context.appendError(
-                error instanceof Error ? error.message : String(error),
-              );
-            }
-            return;
-          }
-        }
-      }
-    } else if (!activeProvider?.isReady()) {
+    if (!activeProvider?.isReady()) {
       ztoolkit.log("Provider not ready:", activeProviderId);
       throw new Error(getString("chat-error-no-provider"));
     }
@@ -2387,143 +1819,10 @@ async function sendMessage(
  * Update user bar display
  * Only shows user bar when PaperChat provider is active
  */
-export function updateUserBarDisplay(
-  container: HTMLElement,
-  authManager: {
-    isLoggedIn(): boolean;
-    getUser(): { username: string } | null;
-    getBalance(): { quota: number; usedQuota: number };
-    formatBalance(): string;
-    getSubscriptionUsageSummary(): SubscriptionUsageSummary | null;
-  },
-): void {
-  const userBar = container.querySelector("#chat-user-bar") as HTMLElement;
-  const userNameEl = container.querySelector("#chat-user-name") as HTMLElement;
-  const userSubscriptionEl = container.querySelector(
-    "#chat-user-subscription",
-  ) as HTMLElement;
-  const userSubscriptionTotalEl = container.querySelector(
-    "#chat-user-subscription-total",
-  ) as HTMLElement;
-  const userSubscriptionProgressFillEl = container.querySelector(
-    "#chat-user-subscription-progress-fill",
-  ) as HTMLElement;
-  const userBalanceEl = container.querySelector(
-    "#chat-user-balance",
-  ) as HTMLElement;
-  const userActionBtn = container.querySelector(
-    "#chat-user-action-btn",
-  ) as HTMLButtonElement;
-  const userBarSettingsBtn = container.querySelector(
-    "#chat-user-bar-settings-btn",
-  ) as HTMLButtonElement;
-  const checkinBtn = container.querySelector(
-    "#chat-checkin-btn",
-  ) as HTMLButtonElement;
-
-  if (!userBar || !userNameEl || !userBalanceEl || !userActionBtn) return;
-
-  // Only show user bar when PaperChat provider is active
-  const providerManager = getProviderManager();
-  const activeProviderId = providerManager.getActiveProviderId();
-
-  if (activeProviderId !== "paperchat") {
+export function updateUserBarDisplay(container: HTMLElement): void {
+  const userBar = container.querySelector("#chat-user-bar") as HTMLElement | null;
+  if (userBar) {
     userBar.style.display = "none";
-    return;
-  }
-
-  userBar.style.display = "flex";
-
-  if (authManager.isLoggedIn()) {
-    const user = authManager.getUser();
-    const isLowBalance =
-      authManager.getBalance().quota < LOW_BALANCE_WARNING_THRESHOLD;
-    const subscriptionUsage = authManager.getSubscriptionUsageSummary();
-    const shouldHideTokenBalance =
-      !!subscriptionUsage &&
-      subscriptionUsage.amountRemaining > LOW_BALANCE_WARNING_THRESHOLD;
-    userNameEl.textContent = user?.username || "";
-    if (userSubscriptionEl) {
-      if (
-        subscriptionUsage &&
-        userSubscriptionTotalEl &&
-        userSubscriptionProgressFillEl
-      ) {
-        userSubscriptionTotalEl.textContent = getString(
-          "user-panel-subscription",
-          {
-            args: { total: subscriptionUsage.amountTotalLabel },
-          },
-        );
-        userSubscriptionProgressFillEl.style.width = `${subscriptionUsage.percentUsed}%`;
-        const usageLabel = `${getString("user-panel-used")}: ${subscriptionUsage.amountUsedLabel} / ${subscriptionUsage.amountTotalLabel}`;
-        userSubscriptionEl.title = usageLabel;
-        userSubscriptionEl.setAttribute("aria-label", usageLabel);
-        if (subscriptionUsage.percentUsed >= 99) {
-          applySubscriptionLimitStyles(userSubscriptionEl);
-        } else {
-          resetSubscriptionLimitStyles(userSubscriptionEl);
-        }
-        userSubscriptionEl.style.display = "flex";
-      } else {
-        if (userSubscriptionTotalEl) {
-          userSubscriptionTotalEl.textContent = "";
-        }
-        if (userSubscriptionProgressFillEl) {
-          userSubscriptionProgressFillEl.style.width = "0%";
-        }
-        userSubscriptionEl.removeAttribute("title");
-        userSubscriptionEl.removeAttribute("aria-label");
-        resetSubscriptionLimitStyles(userSubscriptionEl);
-        userSubscriptionEl.style.display = "none";
-      }
-    }
-    if (shouldHideTokenBalance) {
-      userBalanceEl.textContent = "";
-      userBalanceEl.style.display = "none";
-      resetUserBalanceLowBalanceStyles(userBalanceEl);
-    } else {
-      userBalanceEl.style.display = "inline";
-      userBalanceEl.textContent = `${getString("user-panel-balance")}: ${authManager.formatBalance()}`;
-    }
-    if (!shouldHideTokenBalance && isLowBalance) {
-      applyUserBalanceLowBalanceStyles(userBalanceEl);
-    } else {
-      resetUserBalanceLowBalanceStyles(userBalanceEl);
-    }
-    userActionBtn.textContent = getString("user-panel-logout-btn");
-    // Hide settings button when logged in
-    if (userBarSettingsBtn) {
-      userBarSettingsBtn.style.display = "none";
-    }
-    // Check-in button visibility is owned by refreshCheckinDisplay (respects enabled flag).
-    // Do NOT force-show it here — that would override the server's enabled:false response.
-  } else {
-    userNameEl.textContent = getString("user-panel-not-logged-in");
-    if (userSubscriptionEl) {
-      if (userSubscriptionTotalEl) {
-        userSubscriptionTotalEl.textContent = "";
-      }
-      if (userSubscriptionProgressFillEl) {
-        userSubscriptionProgressFillEl.style.width = "0%";
-      }
-      userSubscriptionEl.removeAttribute("title");
-      userSubscriptionEl.removeAttribute("aria-label");
-      resetSubscriptionLimitStyles(userSubscriptionEl);
-      userSubscriptionEl.style.display = "none";
-    }
-    userBalanceEl.textContent = "";
-    userBalanceEl.style.display = "inline";
-    resetUserBalanceLowBalanceStyles(userBalanceEl);
-    userActionBtn.textContent = getString("user-panel-login-btn");
-    // Show settings button when not logged in
-    if (userBarSettingsBtn) {
-      userBarSettingsBtn.style.display = "flex";
-    }
-    // Hide check-in button when not logged in
-    if (checkinBtn) {
-      checkinBtn.style.display = "none";
-    }
   }
 }
 
@@ -2575,53 +1874,16 @@ export function updateModelSelectorDisplay(container: HTMLElement): void {
     return;
   }
 
-  if (providerManager.getActiveProviderId() !== "paperchat") {
-    const currentModel = getPref("model") as string;
-    if (currentModel) {
-      const modelShort = formatModelLabel(
-        currentModel,
-        providerManager.getActiveProviderId() || undefined,
-      );
-      modelSelectorText.textContent = `${activeProvider.getName()}: ${modelShort}`;
-    } else {
-      modelSelectorText.textContent = activeProvider.getName();
-    }
-    refreshContextUsage();
-    return;
+  const currentModel = getPref("model") as string;
+  if (currentModel) {
+    const modelShort = formatModelLabel(
+      currentModel,
+      providerManager.getActiveProviderId() || undefined,
+    );
+    modelSelectorText.textContent = `${activeProvider.getName()}: ${modelShort}`;
+  } else {
+    modelSelectorText.textContent = activeProvider.getName();
   }
-
-  const tierState = parseTierState(
-    getPref("paperchatTierState") as string | undefined,
-  );
-  const paperchatConfig = providerManager.getProviderConfig(
-    "paperchat",
-  ) as PaperChatProviderConfig | null;
-  const availableModels = paperchatConfig?.availableModels ?? [];
-  const tierPools = deriveTierPools(
-    availableModels,
-    getModelRatios(),
-    getModelRoutingMeta(),
-  );
-  const requestedTier = session?.selectedTier || tierState.selectedTier;
-  const visibleTiers = getAvailablePaperChatTiers(tierPools);
-  const tier = visibleTiers.includes(requestedTier)
-    ? requestedTier
-    : (visibleTiers[0] ?? requestedTier);
-  const tierEntry = tierState.tiers[tier];
-  // Mirror the availability check in paperchat-session-routing.ts so the
-  // displayed model stays in sync with what the next request will actually use.
-  const effectiveModel =
-    tierEntry.mode === "manual" &&
-    tierEntry.modelId &&
-    availableModels.includes(tierEntry.modelId)
-      ? tierEntry.modelId
-      : session?.resolvedModelId;
-  const tierLabel = getPaperChatTierLabel(tier);
-
-  modelSelectorText.textContent = effectiveModel
-    ? `PaperChat: ${tierLabel} · ${effectiveModel}`
-    : `PaperChat: ${tierLabel}`;
-
   refreshContextUsage();
 }
 
@@ -2633,88 +1895,6 @@ export function refreshContextWindowUsageForContainer(
     getCurrentTheme(),
     getChatManager().getActiveSession(),
   );
-}
-
-const REASONING_LABEL_KEYS: Record<ReasoningEffortPreference, string> = {
-  default: "chat-reasoning-default",
-  none: "chat-reasoning-none",
-  low: "chat-reasoning-low",
-  medium: "chat-reasoning-medium",
-  high: "chat-reasoning-high",
-  xhigh: "chat-reasoning-xhigh",
-  max: "chat-reasoning-max",
-};
-
-function getReasoningEffortLabel(effort: ReasoningEffortPreference): string {
-  return getString(REASONING_LABEL_KEYS[effort] as any);
-}
-
-function populateReasoningDropdown(
-  dropdown: HTMLElement,
-  onSelected: (effort: ReasoningEffortPreference) => void,
-): void {
-  const doc = dropdown.ownerDocument!;
-  const theme = getCurrentTheme();
-  const selected = normalizeReasoningEffortPreference(
-    getPref("reasoningEffort"),
-  );
-  dropdown.textContent = "";
-
-  for (const effort of REASONING_EFFORT_OPTIONS) {
-    const isSelected = effort === selected;
-    const item = createElement(doc, "button", {
-      width: "100%",
-      display: "flex",
-      alignItems: "center",
-      gap: "8px",
-      padding: "7px 10px",
-      border: "none",
-      background: isSelected ? theme.dropdownItemHoverBg : "transparent",
-      color: isSelected ? theme.inputFocusBorderColor : theme.textPrimary,
-      cursor: "pointer",
-      fontSize: "12px",
-      textAlign: "left",
-    });
-    item.setAttribute("type", "button");
-
-    const check = createElement(doc, "span", {
-      width: "12px",
-      color: theme.inputFocusBorderColor,
-      fontWeight: "bold",
-    });
-    check.textContent = isSelected ? "✓" : "";
-    item.appendChild(check);
-
-    const label = createElement(doc, "span", {});
-    label.textContent = getReasoningEffortLabel(effort);
-    item.appendChild(label);
-
-    item.addEventListener("mouseenter", () => {
-      if (!isSelected) {
-        item.style.background = theme.dropdownItemHoverBg;
-      }
-    });
-    item.addEventListener("mouseleave", () => {
-      if (!isSelected) {
-        item.style.background = "transparent";
-      }
-    });
-    item.addEventListener("click", () => {
-      setPref("reasoningEffort", effort);
-      for (const provider of getProviderManager().getConfiguredProviders()) {
-        if (
-          provider.config.type === "openai" ||
-          provider.config.type === "openai-compatible" ||
-          provider.config.type === "custom"
-        ) {
-          provider.updateConfig({ reasoningEffort: effort });
-        }
-      }
-      onSelected(effort);
-      dropdown.style.display = "none";
-    });
-    dropdown.appendChild(item);
-  }
 }
 
 /**
@@ -2781,7 +1961,6 @@ function populateModelDropdown(
     const models = config.availableModels || [];
     const isActiveProvider = config.id === activeProviderId;
 
-    // Provider section header
     const sectionHeader = createElement(doc, "div", {
       padding: "8px 12px",
       fontSize: "11px",
@@ -2792,481 +1971,8 @@ function populateModelDropdown(
       textTransform: "uppercase",
       letterSpacing: "0.5px",
     });
-    if (config.id === "paperchat") {
-      sectionHeader.style.display = "flex";
-      sectionHeader.style.alignItems = "center";
-      sectionHeader.style.justifyContent = "space-between";
-      sectionHeader.style.gap = "8px";
-      sectionHeader.style.position = "relative";
-
-      const sectionTitle = createElement(doc, "span", {
-        minWidth: "0",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-      });
-      sectionTitle.textContent = provider.getName();
-      sectionHeader.appendChild(sectionTitle);
-
-      const reasoningControl = createElement(doc, "div", {
-        position: "relative",
-        flexShrink: "0",
-        textTransform: "none",
-        letterSpacing: "0",
-        fontWeight: "400",
-      });
-      const reasoningButton = createElement(
-        doc,
-        "button",
-        {
-          display: "flex",
-          alignItems: "center",
-          gap: "5px",
-          padding: "3px 6px",
-          border: `1px solid ${theme.inputBorderColor}`,
-          borderRadius: "6px",
-          background: theme.dropdownBg,
-          color: theme.textSecondary,
-          cursor: "pointer",
-          fontSize: "11px",
-          lineHeight: "15px",
-          whiteSpace: "nowrap",
-        },
-        {
-          type: "button",
-          "aria-haspopup": "menu",
-          "aria-expanded": "false",
-        },
-      );
-      const reasoningText = createElement(doc, "span", {});
-      const updateReasoningText = (effort: ReasoningEffortPreference) => {
-        reasoningText.textContent = `${getString("chat-reasoning-label")}: ${getReasoningEffortLabel(effort)}`;
-      };
-      updateReasoningText(
-        normalizeReasoningEffortPreference(getPref("reasoningEffort")),
-      );
-      const reasoningArrow = createElement(doc, "span", {
-        fontSize: "9px",
-        opacity: "0.65",
-      });
-      reasoningArrow.textContent = "▼";
-      reasoningButton.appendChild(reasoningText);
-      reasoningButton.appendChild(reasoningArrow);
-
-      const reasoningDropdown = createElement(
-        doc,
-        "div",
-        {
-          display: "none",
-          position: "absolute",
-          top: "calc(100% + 4px)",
-          right: "0",
-          minWidth: "116px",
-          padding: "4px 0",
-          background: theme.dropdownBg,
-          border: `1px solid ${theme.borderColor}`,
-          borderRadius: "8px",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-          zIndex: "2",
-        },
-        { role: "menu" },
-      );
-      reasoningButton.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const shouldOpen = reasoningDropdown.style.display !== "block";
-        if (shouldOpen) {
-          populateReasoningDropdown(reasoningDropdown, (effort) => {
-            updateReasoningText(effort);
-            reasoningButton.setAttribute("aria-expanded", "false");
-          });
-        }
-        reasoningDropdown.style.display = shouldOpen ? "block" : "none";
-        reasoningButton.setAttribute("aria-expanded", String(shouldOpen));
-      });
-      reasoningControl.appendChild(reasoningButton);
-      reasoningControl.appendChild(reasoningDropdown);
-      sectionHeader.appendChild(reasoningControl);
-    } else {
-      sectionHeader.textContent = provider.getName();
-    }
+    sectionHeader.textContent = provider.getName();
     dropdown.appendChild(sectionHeader);
-
-    if (config.id === "paperchat") {
-      const tierState = parseTierState(
-        getPref("paperchatTierState") as string | undefined,
-      );
-      const session = context.chatManager.getActiveSession();
-      const selectedTier = session?.selectedTier || tierState.selectedTier;
-      const tierPools = deriveTierPools(
-        models,
-        getModelRatios(),
-        getModelRoutingMeta(),
-      );
-      type PaperChatSubmenuEntry = {
-        submenu: HTMLElement;
-        arrow: HTMLElement;
-        arrowIcon: HTMLElement;
-        tierItem: HTMLElement;
-        isSelected: boolean;
-      };
-      const submenuEntries: PaperChatSubmenuEntry[] = [];
-
-      const switchPaperChatSelection = async (
-        tier: PaperChatTier,
-        mode: "tier" | "auto" | "manual",
-        modelId: string | null = null,
-      ) => {
-        const previousTierState = parseTierState(
-          getPref("paperchatTierState") as string | undefined,
-        );
-        const previousActiveProviderId = providerManager.getActiveProviderId();
-        const currentTier =
-          previousActiveProviderId === "paperchat"
-            ? context.chatManager.getActiveSession()?.selectedTier ||
-              previousTierState.selectedTier
-            : "paperchat-standard";
-        const previousEntry = previousTierState.tiers[tier];
-        const nextTierState = {
-          ...previousTierState,
-          selectedTier: tier,
-          tiers: {
-            ...previousTierState.tiers,
-            [tier]:
-              mode === "manual" && modelId
-                ? { mode: "manual" as const, modelId }
-                : mode === "auto"
-                  ? { mode: "auto" as const, modelId: null }
-                  : previousEntry,
-          },
-        };
-
-        if (shouldWarnForPaperChatTierSwitch(currentTier, tier)) {
-          const confirmed = await confirmHighConsumptionTierSwitch(doc, tier);
-          if (!confirmed) {
-            closeModelDropdown(dropdown);
-            return;
-          }
-        }
-
-        try {
-          if (!isActiveProvider) {
-            await context.chatManager.clearCurrentSessionPaperChatRetryableState();
-            providerManager.setActiveProvider(config.id);
-          }
-
-          setPref("paperchatTierState", JSON.stringify(nextTierState));
-          await context.chatManager.switchCurrentSessionPaperChatTier(
-            tier,
-            mode === "manual" ? modelId : mode === "auto" ? null : undefined,
-          );
-
-          const activeSession = context.chatManager.getActiveSession();
-          if (activeSession) {
-            context.renderMessages(activeSession.messages);
-          }
-
-          trackChatModelSwitched({
-            source: mode === "tier" ? "tier_dropdown" : "tier_model_submenu",
-            previous_provider: previousActiveProviderId || "unknown",
-            provider: "paperchat",
-            previous_tier: previousTierState.selectedTier,
-            tier,
-            selection_mode: mode,
-            previous_model: previousEntry.modelId || "",
-            model: modelId || "",
-          });
-
-          updateModelSelectorDisplay(container);
-          closeModelDropdown(dropdown);
-          context.updateUserBar();
-        } catch (error) {
-          setPref("paperchatTierState", JSON.stringify(previousTierState));
-          if (
-            previousActiveProviderId &&
-            previousActiveProviderId !== config.id
-          ) {
-            providerManager.setActiveProvider(previousActiveProviderId);
-          }
-          updateModelSelectorDisplay(container);
-          context.updateUserBar();
-          context.appendError(
-            error instanceof Error ? error.message : String(error),
-          );
-        }
-      };
-
-      const setPaperChatSubmenuExpanded = (
-        entry: PaperChatSubmenuEntry,
-        expanded: boolean,
-      ) => {
-        entry.submenu.style.display = expanded ? "block" : "none";
-        entry.arrowIcon.style.transform = expanded
-          ? "rotate(180deg)"
-          : "rotate(0deg)";
-        entry.tierItem.style.background =
-          expanded || entry.isSelected
-            ? theme.dropdownItemHoverBg
-            : "transparent";
-      };
-
-      for (const tier of PAPERCHAT_TIERS) {
-        const tierEntry = tierState.tiers[tier];
-        const tierModels = tierPools[tier] || [];
-        if (tierModels.length === 0) {
-          continue;
-        }
-        const isSelectedTier = isActiveProvider && selectedTier === tier;
-        const isManualSelection =
-          tierEntry.mode === "manual" &&
-          tierEntry.modelId !== null &&
-          tierModels.includes(tierEntry.modelId);
-
-        const tierGroup = createElement(doc, "div", {
-          borderBottom: `1px solid ${theme.borderColor}`,
-        });
-        const tierRow = createElement(doc, "div", {
-          display: "flex",
-          alignItems: "stretch",
-        });
-        const tierItem = createElement(doc, "button", {
-          padding: "8px 12px",
-          fontSize: "12px",
-          color: isSelectedTier
-            ? theme.inputFocusBorderColor
-            : theme.textPrimary,
-          cursor: "pointer",
-          background: isSelectedTier
-            ? theme.dropdownItemHoverBg
-            : "transparent",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          flex: "1",
-          minWidth: "0",
-          border: "none",
-          textAlign: "left",
-        });
-        tierItem.setAttribute("type", "button");
-        if (isSelectedTier) {
-          const check = createElement(doc, "span", {
-            color: theme.inputFocusBorderColor,
-            fontWeight: "bold",
-          });
-          check.textContent = "✓";
-          tierItem.appendChild(check);
-        }
-        const label = createElement(doc, "span", {
-          flex: "1",
-          minWidth: "0",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        });
-        label.textContent = getPaperChatTierDropdownLabel(tier);
-        tierItem.appendChild(label);
-        const arrow = createElement(doc, "button", {
-          fontSize: "10px",
-          opacity: "0.6",
-          color: theme.textSecondary,
-          cursor: "pointer",
-          background: isSelectedTier
-            ? theme.dropdownItemHoverBg
-            : "transparent",
-          border: "none",
-          width: "32px",
-          flex: "0 0 32px",
-          padding: "0",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        });
-        arrow.setAttribute("type", "button");
-        arrow.setAttribute(
-          "aria-label",
-          getString("chat-tier-models", {
-            args: { tier: getPaperChatTierLabel(tier) },
-          }),
-        );
-        const arrowIcon = createElement(doc, "img", {
-          width: "14px",
-          height: "14px",
-          display: "block",
-          pointerEvents: "none",
-          transition: "transform 0.12s ease",
-        });
-        arrowIcon.setAttribute(
-          "src",
-          `chrome://${addon.data.config.addonRef}/content/icons/down.svg`,
-        );
-        arrow.appendChild(arrowIcon);
-
-        const submenu = createElement(doc, "div", {
-          display: "none",
-          maxHeight: "180px",
-          overflowY: "auto",
-          padding: "4px 0 6px 0",
-          background: theme.dropdownBg,
-          borderTop: `1px solid ${theme.borderColor}`,
-        });
-
-        const submenuEntry: PaperChatSubmenuEntry = {
-          submenu,
-          arrow,
-          arrowIcon,
-          tierItem,
-          isSelected: isSelectedTier,
-        };
-        submenuEntries.push(submenuEntry);
-        if (isSelectedTier) {
-          setPaperChatSubmenuExpanded(submenuEntry, true);
-        }
-
-        arrow.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          const shouldExpand = submenu.style.display === "none";
-          for (const entry of submenuEntries) {
-            setPaperChatSubmenuExpanded(entry, false);
-          }
-          setPaperChatSubmenuExpanded(submenuEntry, shouldExpand);
-        });
-        tierItem.addEventListener("focus", () => {
-          tierItem.style.outline = `2px solid ${theme.inputFocusBorderColor}`;
-          tierItem.style.outlineOffset = "-2px";
-        });
-        tierItem.addEventListener("blur", () => {
-          tierItem.style.outline = "none";
-          tierItem.style.outlineOffset = "0";
-          if (!isSelectedTier) {
-            tierItem.style.background = "transparent";
-          }
-        });
-        tierItem.addEventListener("click", async () => {
-          if (isSelectedTier) {
-            closeModelDropdown(dropdown);
-            return;
-          }
-          await switchPaperChatSelection(tier, "tier");
-        });
-
-        tierRow.appendChild(tierItem);
-        tierRow.appendChild(arrow);
-        tierGroup.appendChild(tierRow);
-
-        const autoItem = createElement(doc, "button", {
-          padding: "7px 12px 7px 28px",
-          fontSize: "12px",
-          color:
-            isSelectedTier && !isManualSelection
-              ? theme.inputFocusBorderColor
-              : theme.textPrimary,
-          cursor: "pointer",
-          background:
-            isSelectedTier && !isManualSelection
-              ? theme.dropdownItemHoverBg
-              : "transparent",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          width: "100%",
-          border: "none",
-          textAlign: "left",
-        });
-        autoItem.setAttribute("type", "button");
-        if (isSelectedTier && !isManualSelection) {
-          const check = createElement(doc, "span", {
-            color: theme.inputFocusBorderColor,
-            fontWeight: "bold",
-          });
-          check.textContent = "✓";
-          autoItem.appendChild(check);
-        }
-        const autoLabel = createElement(doc, "span", {});
-        autoLabel.textContent = getString("pref-paperchat-model-auto");
-        autoItem.appendChild(autoLabel);
-        autoItem.addEventListener("mouseenter", () => {
-          if (!isSelectedTier || isManualSelection) {
-            autoItem.style.background = theme.dropdownItemHoverBg;
-          }
-        });
-        autoItem.addEventListener("mouseleave", () => {
-          if (!isSelectedTier || isManualSelection) {
-            autoItem.style.background = "transparent";
-          }
-        });
-        autoItem.addEventListener("click", async () => {
-          if (isSelectedTier && !isManualSelection) {
-            closeModelDropdown(dropdown);
-            return;
-          }
-          await switchPaperChatSelection(tier, "auto");
-        });
-        submenu.appendChild(autoItem);
-
-        for (const model of tierModels) {
-          const isCurrentModel =
-            isSelectedTier &&
-            tierEntry.mode === "manual" &&
-            tierEntry.modelId === model;
-          const modelItem = createElement(doc, "button", {
-            padding: "7px 12px 7px 28px",
-            fontSize: "12px",
-            color: isCurrentModel
-              ? theme.inputFocusBorderColor
-              : theme.textPrimary,
-            cursor: "pointer",
-            background: isCurrentModel
-              ? theme.dropdownItemHoverBg
-              : "transparent",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            width: "100%",
-            border: "none",
-            textAlign: "left",
-          });
-          modelItem.setAttribute("type", "button");
-          if (isCurrentModel) {
-            const check = createElement(doc, "span", {
-              color: theme.inputFocusBorderColor,
-              fontWeight: "bold",
-            });
-            check.textContent = "✓";
-            modelItem.appendChild(check);
-          }
-          const modelName = createElement(doc, "span", {
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          });
-          modelName.textContent = formatModelLabel(model, config.id);
-          modelItem.appendChild(modelName);
-          modelItem.addEventListener("mouseenter", () => {
-            if (!isCurrentModel) {
-              modelItem.style.background = theme.dropdownItemHoverBg;
-            }
-          });
-          modelItem.addEventListener("mouseleave", () => {
-            if (!isCurrentModel) {
-              modelItem.style.background = "transparent";
-            }
-          });
-          modelItem.addEventListener("click", async () => {
-            if (isCurrentModel) {
-              closeModelDropdown(dropdown);
-              return;
-            }
-            await switchPaperChatSelection(tier, "manual", model);
-          });
-          submenu.appendChild(modelItem);
-        }
-
-        tierGroup.appendChild(submenu);
-        dropdown.appendChild(tierGroup);
-      }
-      continue;
-    }
 
     if (models.length === 0) {
       // No models - show placeholder
@@ -3333,19 +2039,8 @@ function populateModelDropdown(
         modelItem.addEventListener("click", async () => {
           const previousProviderId = providerManager.getActiveProviderId();
           const previousModel = getPref("model") as string | undefined;
-          const leavingPaperChat =
-            previousProviderId === "paperchat" && config.id !== "paperchat";
 
           try {
-            if (leavingPaperChat) {
-              await context.chatManager.clearCurrentSessionPaperChatRetryableState();
-              const paperchatProvider =
-                providerManager.getProvider("paperchat");
-              paperchatProvider?.updateConfig({
-                resolvedModelOverride: undefined,
-              });
-            }
-
             // Switch provider if needed
             if (!isActiveProvider) {
               providerManager.setActiveProvider(config.id);

@@ -21,7 +21,6 @@ import type {
 import { getAuthManager } from "../../auth";
 import { getProviderManager } from "../../providers";
 import { providerSupportsToolCalling } from "../../providers/provider-capabilities";
-import { isPaperChatQuotaError } from "../../providers/paperchat-errors";
 import { getPref, setPref } from "../../../utils/prefs";
 import {
   createNoteSummaryContext,
@@ -98,10 +97,8 @@ import {
   syncSessionNavigationState,
   updateConversationNoteSummaryButton,
 } from "./ChatPanelEvents";
-import { loadCachedRatios } from "../../preferences/ModelsFetcher";
 import { Guide } from "../Guide";
 import { ANALYTICS_EVENTS, getAnalyticsService } from "../../analytics";
-import { refreshPaperChatNotice } from "../../providers/PaperChatNoticeService";
 import {
   NextQuestionHintController,
   requestNextQuestionHintAfterRecentRender,
@@ -725,7 +722,6 @@ async function sendNoteSummaryPrompt(
         ? ["request_user_input", "create_note"]
         : ["create_note"],
     modelRequestContent,
-    allowPaperChatRetry: false,
     trustedSourceItemKeys: normalizedSourceItemKeys,
     noteSummaryContext,
   });
@@ -1611,9 +1607,6 @@ async function initializeChatContentCommon(
   const requestedItem = pendingPanelItem;
   pendingPanelItem = null;
 
-  // Load cached model ratios for PaperChat
-  loadCachedRatios();
-
   // Initialize auth
   await authManager.initialize();
   context.updateUserBar();
@@ -1625,7 +1618,7 @@ async function initializeChatContentCommon(
       context.updateUserBar();
       // Re-fetch check-in status on login status change (e.g. auto-relogin after session expiry)
       if (authManager.isLoggedIn()) {
-        refreshCheckinDisplay(container, authManager);
+        refreshCheckinDisplay(container);
       }
     },
   });
@@ -2021,8 +2014,6 @@ function setupChatManagerCallbacks(
   context: ChatPanelContext,
   container: HTMLElement,
 ): void {
-  const authManager = getAuthManager();
-
   manager.setCallbacks({
     onMessageUpdate: (messages) => {
       ztoolkit.log(
@@ -2113,20 +2104,6 @@ function setupChatManagerCallbacks(
     onError: (error) => {
       ztoolkit.log("[ChatPanel] API Error:", error.message);
       context.appendError(error.message);
-      if (isPaperChatQuotaError(error)) {
-        void (async () => {
-          try {
-            ztoolkit.log("[Balance] Refreshing balance after quota error");
-            await authManager.refreshUserInfo();
-            context.updateUserBar();
-          } catch (refreshError) {
-            ztoolkit.log(
-              "[Balance] Failed to refresh balance after quota error:",
-              refreshError,
-            );
-          }
-        })();
-      }
     },
     onPdfAttached: () => {
       if (container) {
@@ -2142,16 +2119,6 @@ function setupChatManagerCallbacks(
       }
     },
     onMessageComplete: async () => {
-      const providerManager = getProviderManager();
-      if (providerManager.getActiveProviderId() === "paperchat") {
-        try {
-          ztoolkit.log("[Balance] Refreshing balance after message completion");
-          await authManager.refreshUserInfo();
-          context.updateUserBar();
-        } catch (error) {
-          ztoolkit.log("[Balance] Failed to refresh after completion:", error);
-        }
-      }
       void NextQuestionHintController.get(container)
         ?.requestForLatestCompletion()
         .catch((error) => {
@@ -2203,10 +2170,6 @@ export function showPanel(source: ChatPanelOpenSource = "unknown"): void {
     return;
   } else {
     updateToolbarButtonState(true);
-  }
-
-  if (getProviderManager().getActiveProviderId() === "paperchat") {
-    void refreshPaperChatNotice();
   }
 
   panelVisibleSince = Date.now();
@@ -2850,7 +2813,7 @@ function createContext(container: HTMLElement): ChatPanelContext {
     },
     updateUserBar: () => {
       if (container) {
-        updateUserBarDisplay(container, authManager);
+        updateUserBarDisplay(container);
       }
     },
     updatePdfCheckboxVisibility: async (item: Zotero.Item | null) => {
@@ -2884,11 +2847,7 @@ function createContext(container: HTMLElement): ChatPanelContext {
         const queueFailureErrorId = session
           ? sessionTurnQueue.snapshot(session.id).failureErrorId
           : undefined;
-        const retryableErrorMessageId =
-          queueFailureErrorId ||
-          (getProviderManager().getActiveProviderId() === "paperchat"
-            ? session?.lastRetryableErrorMessageId
-            : undefined);
+        const retryableErrorMessageId = queueFailureErrorId;
         if (chatHistory) {
           renderMessageElementsWithMarkdownActions(
             chatHistory,
@@ -2908,19 +2867,7 @@ function createContext(container: HTMLElement): ChatPanelContext {
                 ) {
                   return;
                 }
-                const retried = await manager.retryCurrentPaperChatFailure();
-                if (!retried) {
-                  throw new Error(getString("chat-retry-unavailable"));
-                }
-              },
-              onRetryError: (error) => {
-                context.appendError(error.message);
-              },
-              onReroll: async () => {
-                await context.rerollPaperChatTierForCurrentSession();
-              },
-              onRerollError: (error) => {
-                context.appendError(error.message);
+                throw new Error(getString("chat-retry-unavailable"));
               },
               onFork: (assistantMessageId) =>
                 continueInNewChatFromMessage(context, assistantMessageId),
@@ -3016,14 +2963,6 @@ function createContext(container: HTMLElement): ChatPanelContext {
     },
     appendSuccess: (message: string) => {
       appendChatStatusMessage(container, message, "success");
-    },
-    rerollPaperChatTierForCurrentSession: async () => {
-      const reroute = await manager.rerollCurrentPaperChatFailureAndRetry();
-      if (!reroute) {
-        throw new Error(getString("chat-reroll-unavailable"));
-      }
-      updateModelSelectorDisplay(container);
-      return reroute;
     },
   };
 

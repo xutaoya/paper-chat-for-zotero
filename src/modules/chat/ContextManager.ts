@@ -11,10 +11,9 @@ import type {
   ChatSession,
   ContextSummary,
 } from "../../types/chat";
-import type { ModelInfo, ProviderConfig } from "../../types/provider";
+import type { ProviderConfig } from "../../types/provider";
 import { getPref } from "../../utils/prefs";
 import { getProviderManager } from "../providers";
-import { getModelRoutingMeta } from "../preferences/ModelsFetcher";
 import { createInterruptedAssistantContextMessage } from "./interrupted-message";
 import {
   applyQuotedMessagesToModelRequest,
@@ -193,30 +192,9 @@ function normalizeAssistantReplacementSequence(
 
 function getProviderModelId(
   config: ProviderConfig,
-  session?: Pick<ChatSession, "resolvedModelId">,
+  _session?: Pick<ChatSession, "resolvedModelId">,
 ): string | undefined {
-  if (config.type === "paperchat") {
-    return (
-      session?.resolvedModelId ||
-      config.resolvedModelOverride ||
-      config.defaultModel
-    );
-  }
   return config.defaultModel;
-}
-
-function getPaperChatRoutingModelInfo(
-  config: ProviderConfig | undefined,
-  modelId: string | undefined,
-): Pick<ModelInfo, "contextWindow" | "maxOutput"> {
-  if (!config || config.type !== "paperchat" || !modelId) {
-    return {};
-  }
-  const meta = getModelRoutingMeta()[modelId];
-  return {
-    contextWindow: meta?.contextWindow,
-    maxOutput: meta?.maxOutput,
-  };
 }
 
 export function normalizeContextAutoCompactWindowTokens(
@@ -251,14 +229,10 @@ export function getSessionDeclaredContextWindow(
   const modelId = config ? getProviderModelId(config, session) : undefined;
   const modelInfo =
     config && modelId ? providerManager.getModelInfo(config.id, modelId) : null;
-  const routingModelInfo = getPaperChatRoutingModelInfo(config, modelId);
   const configuredContextWindow = normalizeContextAutoCompactWindowTokens(
     getPref("contextAutoCompactWindowTokens"),
   );
-  const declaredContextWindow =
-    routingModelInfo.contextWindow && routingModelInfo.contextWindow > 0
-      ? routingModelInfo.contextWindow
-      : modelInfo?.contextWindow;
+  const declaredContextWindow = modelInfo?.contextWindow;
   return declaredContextWindow && declaredContextWindow > 0
     ? Math.min(configuredContextWindow, declaredContextWindow)
     : configuredContextWindow;
@@ -309,15 +283,10 @@ export function getContextAutoCompactTokenLimit(
   const modelId = config ? getProviderModelId(config, session) : undefined;
   const modelInfo =
     config && modelId ? providerManager.getModelInfo(config.id, modelId) : null;
-  const routingModelInfo = getPaperChatRoutingModelInfo(config, modelId);
   const maxOutput =
-    config?.type !== "paperchat" &&
-    typeof config?.maxTokens === "number" &&
-    config.maxTokens > 0
+    typeof config?.maxTokens === "number" && config.maxTokens > 0
       ? config.maxTokens
-      : routingModelInfo.maxOutput ||
-        modelInfo?.maxOutput ||
-        DEFAULT_MAX_OUTPUT_TOKENS;
+      : modelInfo?.maxOutput || DEFAULT_MAX_OUTPUT_TOKENS;
   const summaryReserve = Math.min(maxOutput, MAX_SUMMARY_OUTPUT_RESERVE_TOKENS);
   const buffer = getPref("contextAutoCompactBufferTokens") ?? 13000;
   return contextWindow - summaryReserve - buffer;

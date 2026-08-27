@@ -8,28 +8,14 @@ declare namespace _ZoteroTypes {
   interface Prefs {
     PluginPrefsMap: {
       "apiKey": string;
-      "baseUrl": string;
       "model": string;
       "maxTokens": number;
       "temperature": string;
       "systemPrompt": string;
-      "username": string;
-      "loginPassword": string;
-      "userId": number;
-      "userQuotaJson": string;
-      "userSubscriptionJson": string;
-      "paperchatModelsCache": string;
-      "paperchatRatiosCache": string;
-      "paperchatRoutingConfigCache": string;
-      "paperchatTierState": string;
-      "paperchatSuppressHighTierWarning": boolean;
-      "paperchatPresentationSlideCount": number;
-      "paperchatPresentationDesignSystem": string;
-      "reasoningEffort": string;
-      "paperchatBaseUrlOverride": string;
       "uploadRawPdfOnFailure": boolean;
       "useMineruOnExtractFailure": boolean;
       "mineruApiToken": string;
+      "reasoningEffort": string;
       "panelMode": string;
       "floatingWindowWidth": number;
       "floatingWindowHeight": number;

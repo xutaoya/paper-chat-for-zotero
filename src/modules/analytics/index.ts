@@ -1,46 +1,46 @@
-import { version } from "../../../package.json";
-import { getPref } from "../../utils/prefs";
-import {
-  AnalyticsService,
-  type AnalyticsEventProps,
-  type AnalyticsHttpTransport,
-  type AnalyticsLogger,
-} from "./AnalyticsService";
-import { NO_RETRY_ON_THROTTLE } from "../../utils/http";
+export type AnalyticsEventProps = Record<string, unknown>;
 
-export { AnalyticsService } from "./AnalyticsService";
-export type {
-  AnalyticsEventProps,
-  AnalyticsHttpRequest,
-  AnalyticsHttpResponse,
-  AnalyticsHttpTransport,
-  AnalyticsLogger,
-  AnalyticsServiceOptions,
-} from "./AnalyticsService";
-export { ANALYTICS_EVENTS, type AnalyticsEventName } from "./events";
-export {
-  trackPaperChatPresentationEntryClicked,
-  trackPaperChatPurchaseButtonClicked,
-  trackPaperChatPurchaseEntryClicked,
-  type AnalyticsTracker,
-  type PaperChatPresentationEntryContext,
-  type PaperChatPresentationEntrySource,
-  type PaperChatProductCategory,
-  type PaperChatPurchaseEntryContext,
-  type PaperChatPurchaseEntrySource,
-  type PaperChatPurchaseItemAnalytics,
-} from "./businessEvents";
+export const ANALYTICS_EVENTS = {
+  pluginStarted: "plugin_started",
+  settingsOpened: "settings_opened",
+  settingsProviderViewed: "settings_provider_viewed",
+  chatPanelOpened: "chat_panel_opened",
+  chatPanelClosed: "chat_panel_closed",
+  chatSent: "chat_sent",
+  chatCompleted: "chat_completed",
+  chatModelSwitched: "chat_model_switched",
+  signInCompleted: "sign_in_completed",
+  paperChatPresentationEntryClicked: "paperchat_presentation_entry_clicked",
+  paperChatPurchaseEntryClicked: "paperchat_purchase_entry_clicked",
+  paperChatPurchaseButtonClicked: "paperchat_purchase_button_clicked",
+  paperChatLowBalanceClicked: "paperchat_low_balance_clicked",
+  paperChatQuotaError: "paperchat_quota_error",
+  paperChatModelRerouted: "paperchat_model_rerouted",
+  aiSummaryBatchStarted: "ai_summary_batch_started",
+  aiSummaryDeepRequested: "ai_summary_deep_requested",
+  aiSummaryQuickRequested: "ai_summary_quick_requested",
+} as const;
 
-const ANALYTICS_ENABLED = true;
-const ANALYTICS_APP_KEY = "A-SH-9454265759";
-const ANALYTICS_HOST = "https://aptabase.zotero.store";
-const ANALYTICS_SDK_VERSION = "paper-chat-analytics/1";
+export type AnalyticsEventName =
+  (typeof ANALYTICS_EVENTS)[keyof typeof ANALYTICS_EVENTS];
 
-const APTABASE_CLOUD_ENDPOINTS: Record<string, string> = {
-  US: "https://us.aptabase.com/api/v0/events",
-  EU: "https://eu.aptabase.com/api/v0/events",
-  DEV: "http://localhost:3000/api/v0/events",
-};
+export type PaperChatPresentationEntrySource = "chat_button" | "library_menu";
+export type PaperChatProductCategory = string;
+export type PaperChatPurchaseEntrySource = string;
+
+export interface PaperChatPresentationEntryContext {
+  item_key?: string;
+  library_id?: number;
+}
+
+export interface PaperChatPurchaseEntryContext {
+  source?: string;
+}
+
+export interface PaperChatPurchaseItemAnalytics {
+  sku?: string;
+  category?: PaperChatProductCategory;
+}
 
 export interface Analytics {
   track(eventName: string, props?: AnalyticsEventProps): void;
@@ -48,119 +48,15 @@ export interface Analytics {
 }
 
 class NoopAnalyticsService implements Analytics {
-  track(): void {
-    // intentionally empty
-  }
-  async destroy(): Promise<void> {
-    // intentionally empty
-  }
-}
-
-function normalizeHost(raw: string): string | undefined {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-  return trimmed.replace(/\/+$/, "");
-}
-
-function isSelfHostedAppKey(appKey: string): boolean {
-  return appKey.split("-")[1] === "SH";
-}
-
-function resolveAptabaseEndpoint(
-  appKey: string,
-  host: string | undefined,
-): string | undefined {
-  const region = appKey.split("-")[1];
-  if (region === "SH") {
-    return host ? `${host}/api/v0/events` : undefined;
-  }
-  return APTABASE_CLOUD_ENDPOINTS[region];
-}
-
-function createZoteroHttpTransport(): AnalyticsHttpTransport | null {
-  const request = (Zotero as typeof globalThis.Zotero | undefined)?.HTTP
-    ?.request;
-  if (typeof request !== "function") {
-    return null;
-  }
-  const boundRequest = request.bind(Zotero.HTTP);
-  return async ({ method, url, headers, body }) => {
-    const response = await boundRequest(method, url, {
-      headers,
-      body,
-      responseType: "text",
-      successCodes: false as const,
-      ...NO_RETRY_ON_THROTTLE,
-    });
-    return {
-      status: response.status,
-      responseText: response.responseText || "",
-    };
-  };
-}
-
-const pluginLogger: AnalyticsLogger = {
-  log: (message, context) => {
-    if (typeof ztoolkit !== "undefined" && ztoolkit?.log) {
-      ztoolkit.log(message, context);
-    }
-  },
-};
-
-function getAnalyticsUserId(): string {
-  const userId = getPref("userId");
-  return typeof userId === "number" && userId > 0 ? String(userId) : "";
+  track(): void {}
+  async destroy(): Promise<void> {}
 }
 
 let analyticsService: Analytics | null = null;
 
-function buildAnalyticsService(): Analytics {
-  if (!ANALYTICS_ENABLED) {
-    return new NoopAnalyticsService();
-  }
-  const appKey = ANALYTICS_APP_KEY.trim();
-  if (!appKey) {
-    return new NoopAnalyticsService();
-  }
-  const host = normalizeHost(ANALYTICS_HOST);
-  if (isSelfHostedAppKey(appKey) && !host) {
-    return new NoopAnalyticsService();
-  }
-  const endpoint = resolveAptabaseEndpoint(appKey, host);
-  if (!endpoint) {
-    return new NoopAnalyticsService();
-  }
-  const http = createZoteroHttpTransport();
-  if (!http) {
-    return new NoopAnalyticsService();
-  }
-
-  return new AnalyticsService({
-    appKey,
-    endpoint,
-    appVersion: version,
-    isDebug: __env__ !== "production",
-    sdkVersion: ANALYTICS_SDK_VERSION,
-    http,
-    logger: pluginLogger,
-    getUserId: getAnalyticsUserId,
-  });
-}
-
 export function getAnalyticsService(): Analytics {
   if (!analyticsService) {
-    try {
-      analyticsService = buildAnalyticsService();
-    } catch (error) {
-      try {
-        pluginLogger.log("[Analytics] failed to initialize service", { error });
-      } catch {
-        // Analytics initialization and logging are both best-effort.
-      }
-      analyticsService = new NoopAnalyticsService();
-    }
+    analyticsService = new NoopAnalyticsService();
   }
   return analyticsService;
 }
@@ -168,4 +64,37 @@ export function getAnalyticsService(): Analytics {
 export async function destroyAnalyticsService(): Promise<void> {
   await analyticsService?.destroy();
   analyticsService = null;
+}
+
+export function trackPaperChatPresentationEntryClicked(
+  ..._args: unknown[]
+): void {}
+
+export function trackPaperChatPurchaseButtonClicked(..._args: unknown[]): void {}
+export function trackPaperChatPurchaseEntryClicked(..._args: unknown[]): void {}
+
+export function buildErrorProps(
+  reason: string,
+  error?: unknown,
+): AnalyticsEventProps {
+  return {
+    reason,
+    error: error === undefined ? reason : String(error),
+  };
+}
+
+export function extractStatusCode(error: unknown): number | undefined {
+  if (
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    typeof (error as { status: unknown }).status === "number"
+  ) {
+    return (error as { status: number }).status;
+  }
+  return undefined;
+}
+
+export function isNetworkErrorMessage(message: string): boolean {
+  return /network|fetch|timeout|offline/i.test(message);
 }

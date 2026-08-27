@@ -6,6 +6,7 @@ export {
 } from "./PresentationCapability";
 export {
   createPresentationLaunchToolDefinition,
+  createPresentationToolLaunchSession,
   PRESENTATION_LAUNCH_TOOL_NAME,
   type PresentationLaunchIntent,
   type PresentationLaunchSourceResolution,
@@ -14,40 +15,46 @@ export {
   type PresentationToolLaunchSession,
 } from "./PresentationToolLaunchSession";
 export {
-  extractPresentationMentionSources,
-  extractPresentationRetrySources,
-  type PresentationMentionSource,
-} from "./PresentationSourceContext";
+  createPresentationLaunchAuthorization,
+  beginPresentationAuthorizationAttempt,
+  finishPresentationAuthorizationAttempt,
+  isIssuedPresentationLaunchAuthorization,
+  MAX_PRESENTATION_ATTEMPTS_PER_AUTHORIZATION,
+  type PresentationLaunchAuthorization,
+} from "./PresentationLaunchAuthorization";
 export {
-  canLaunchPresentationFromChat,
-  createPresentationChatLaunchSession,
-  registerPresentationChatLaunchBridge,
-  unregisterPresentationChatLaunchBridge,
-  type PresentationChatLaunchBridge,
-  type PresentationChatLaunchOptions,
-  type PresentationTaskLocation,
-} from "./PresentationChatLaunchBridge";
-export { resolvePresentationLaunchSource } from "./PresentationEntry";
-export {
-  attachPresentationToZotero,
-  type PresentationAttachmentResult,
-} from "./PresentationAttachment";
-export {
-  getPresentationRenderer,
-  resetPresentationRendererForTests,
-} from "./PresentationRendererLoader";
-export {
-  PresentationRequestSchema,
-  PresentationSlideSchema,
-} from "./PresentationSchema";
+  DEFAULT_PRESENTATION_LAUNCH_SETTINGS,
+  normalizePresentationLaunchSettings,
+  type PresentationLaunchSettings,
+} from "./PresentationLaunchSettings";
+export { normalizePresentationToolCall } from "./PresentationToolCallPolicy";
+export { PresentationCardProgressTracker } from "./PresentationCardProgress";
 export {
   PresentationIntentSchema,
   buildPresentationPaperContext,
   buildPresentationPlannerSystemPrompt,
   buildPresentationPlannerUserPrompt,
   parsePresentationPlannerResponse,
+  type PresentationIntent,
+  type PresentationPlanner,
+  type PresentationPlanningRequest,
 } from "./PresentationPlanner";
-export { normalizePresentationToolCall } from "./PresentationToolCallPolicy";
+export {
+  parsePresentationVisualReviewResponse,
+  type PresentationVisualReviewer,
+  type PresentationVisualReviewRequest,
+  type PresentationVisualReviewResponse,
+} from "./PresentationVisualReview";
+export {
+  PresentationRequestSchema,
+  PresentationSlideSchema,
+  type PresentationFigure,
+  type PresentationRequest,
+  type PresentationSlide,
+  type RenderablePresentationRequest,
+  type RenderablePresentationSlide,
+  type ResolvedPresentationFigure,
+} from "./PresentationSchema";
 export type {
   PresentationCapabilityTestOptions,
   PresentationCardProgress,
@@ -58,21 +65,4 @@ export type {
   PresentationSourceContext,
   PresentationRendererApi,
 } from "./contracts";
-export type {
-  PresentationVisualReviewer,
-  PresentationVisualReviewRequest,
-  PresentationVisualReviewResponse,
-} from "./PresentationVisualReview";
-export type {
-  PresentationIntent,
-  PresentationPlanner,
-  PresentationPlanningRequest,
-} from "./PresentationPlanner";
-export type {
-  PresentationFigure,
-  PresentationRequest,
-  PresentationSlide,
-  RenderablePresentationRequest,
-  RenderablePresentationSlide,
-  ResolvedPresentationFigure,
-} from "./PresentationSchema";
+export { PRESENTATION_RENDERER_GLOBAL } from "./contracts";

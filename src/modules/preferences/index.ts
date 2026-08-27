@@ -1,8 +1,5 @@
 /**
- * Preferences module - Split from preferenceScript.ts
- *
- * This module provides the preferences UI for managing AI providers,
- * user authentication, and model settings.
+ * Preferences module
  */
 
 import {
@@ -10,14 +7,8 @@ import {
   bindPrefEvents,
   refreshPrefsUI as refreshPrefsUIState,
 } from "./PreferencesManager";
-import { getAuthManager } from "../auth";
-import { togglePaperChatNotice } from "./PaperChatNoticeRenderer";
-import { updateUserDisplay } from "./UserAuthUI";
 import type { PrefsRefreshOptions } from "./types";
 
-/**
- * Register preferences scripts - main entry point
- */
 export async function registerPrefsScripts(_window: Window): Promise<void> {
   addon.data.prefs = {
     window: _window,
@@ -36,14 +27,6 @@ export async function registerPrefsScripts(_window: Window): Promise<void> {
     await initializePrefsUI();
   } catch (error) {
     ztoolkit.log("[Preferences] Failed to initialize prefs UI:", error);
-    try {
-      updateUserDisplay(_window.document, getAuthManager());
-    } catch (displayError) {
-      ztoolkit.log(
-        "[Preferences] Failed to update user display after init failure:",
-        displayError,
-      );
-    }
   }
   try {
     bindPrefEvents();
@@ -62,6 +45,4 @@ export async function refreshPrefsUI(
   await refreshPrefsUIState(options);
 }
 
-export function togglePaperChatNoticeUI(window: Window): void {
-  togglePaperChatNotice(window.document);
-}
+export function togglePaperChatNoticeUI(_window: Window): void {}

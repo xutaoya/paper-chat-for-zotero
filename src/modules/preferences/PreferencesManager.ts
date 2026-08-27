@@ -2,14 +2,7 @@
  * PreferencesManager - Main preferences coordination
  */
 
-import { getAuthManager } from "../auth";
 import { getProviderManager } from "../providers";
-import { loadCachedRatios, fetchPaperchatModels } from "./ModelsFetcher";
-import { updateUserDisplay, bindUserAuthEvents } from "./UserAuthUI";
-import {
-  populatePaperchatModels,
-  bindPaperchatEvents,
-} from "./PaperchatProviderUI";
 import { bindApiKeyEvents } from "./ApiKeyProviderUI";
 import {
   populateProviderList,
@@ -41,7 +34,6 @@ import type {
   ToolPermissionRiskLevel,
 } from "../../types/tool";
 import { ANALYTICS_EVENTS, getAnalyticsService } from "../analytics";
-import { refreshPaperChatNoticeUI } from "./PaperChatNoticeRenderer";
 
 // Current selected provider ID
 let currentProviderId: string = "openai";
@@ -95,12 +87,8 @@ export function setCurrentProviderId(id: string): void {
 export async function initializePrefsUI(): Promise<void> {
   if (addon.data.prefs?.window == undefined) return;
 
-  const authManager = getAuthManager();
   const doc = addon.data.prefs.window.document;
   const providerManager = getProviderManager();
-
-  // Initialize auth manager
-  await authManager.initialize();
 
   const initialProviderId = resolveCurrentProviderId(doc, providerManager, {});
   getAnalyticsService().track(ANALYTICS_EVENTS.settingsOpened, {
@@ -113,7 +101,6 @@ export async function initializePrefsUI(): Promise<void> {
     providerViewSource: "settings_opened",
   });
 
-  void refreshPaperChatNoticeUI(doc);
 }
 
 function resolveCurrentProviderId(
@@ -153,15 +140,7 @@ export async function refreshPrefsUI(
   if (addon.data.prefs?.window == undefined) return;
 
   const doc = addon.data.prefs.window.document;
-  const authManager = getAuthManager();
   const providerManager = getProviderManager();
-
-  if (options.syncUserInfo && authManager.isLoggedIn()) {
-    await authManager.refreshUserInfo();
-  }
-
-  // Load cached model ratios
-  loadCachedRatios();
 
   // Populate provider sidebar
   populateProviderList(doc);
@@ -175,12 +154,6 @@ export async function refreshPrefsUI(
     trackAnalytics: options.trackProviderView === true,
     analyticsSource: options.providerViewSource || "refresh",
   });
-
-  // Update paperchat user status display
-  updateUserDisplay(doc, authManager);
-
-  // Populate PaperChat model dropdown
-  populatePaperchatModels(doc);
 
   // Initialize PDF settings checkbox
   initPdfSettingsCheckbox(doc);
@@ -223,7 +196,6 @@ export function bindPrefEvents(): void {
 
   const doc = addon.data.prefs.window.document;
   const win = addon.data.prefs.window;
-  const authManager = getAuthManager();
 
   type PrefsWindowState = Window & {
     __paperchatPrefsFocusBound?: boolean;
@@ -271,22 +243,6 @@ export function bindPrefEvents(): void {
     populateActiveProviderDropdown(doc);
     invalidateEmbeddingProviderCache();
   };
-
-  // Bind user auth events
-  const cleanupUserAuthEvents = bindUserAuthEvents(
-    doc,
-    authManager,
-    refreshProviderList,
-  );
-  prefsWin.__paperchatPrefsCleanup.push(cleanupUserAuthEvents);
-
-  // Bind PaperChat events
-  bindPaperchatEvents(doc, async () => {
-    await fetchPaperchatModels(doc, (models) => {
-      populatePaperchatModels(doc, models, true);
-      invalidateEmbeddingProviderCache();
-    });
-  });
 
   // Bind API key events
   bindApiKeyEvents(

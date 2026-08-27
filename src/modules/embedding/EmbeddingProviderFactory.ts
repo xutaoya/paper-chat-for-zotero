@@ -12,16 +12,10 @@ import type {
 } from "../../types/embedding";
 import type { ApiKeyProviderConfig } from "../../types/provider";
 import { getProviderManager } from "../providers/ProviderManager";
-import { getAuthManager } from "../auth";
 import { GeminiEmbedding } from "./providers/GeminiEmbedding";
 import { OpenAIEmbedding } from "./providers/OpenAIEmbedding";
 import { OllamaEmbedding } from "./providers/OllamaEmbedding";
-import { getErrorMessage } from "../../utils/common";
 import { getString } from "../../utils/locale";
-import {
-  PaperChatEmbedding,
-  getAvailableEmbeddingModels,
-} from "./providers/PaperChatEmbedding";
 
 export class EmbeddingProviderFactory {
   private cachedProvider: EmbeddingProvider | null = null;
@@ -65,13 +59,6 @@ export class EmbeddingProviderFactory {
         | ApiKeyProviderConfig
         | undefined;
 
-    if (activeProviderId === "paperchat") {
-      const paperChatStatus = this.detectPaperChatStatus();
-      if (paperChatStatus) {
-        return paperChatStatus;
-      }
-    }
-
     if (activeProviderId === "gemini" && getApiKeyConfig("gemini")?.apiKey) {
       return this.createGeminiStatus();
     }
@@ -110,22 +97,6 @@ export class EmbeddingProviderFactory {
       provider: null,
       message: `⚠️ ${getString("pref-embedding-unavailable-none")}`,
     };
-  }
-
-  private detectPaperChatStatus(): EmbeddingStatus | null {
-    const authManager = getAuthManager();
-    if (authManager.isLoggedIn() && authManager.getApiKey()) {
-      const embeddingModels = getAvailableEmbeddingModels();
-      if (embeddingModels.length > 0) {
-        return {
-          available: true,
-          provider: "paperchat",
-          message: `✅ ${getString("pref-embedding-status-paperchat", { args: { model: embeddingModels[0] } })}`,
-        };
-      }
-    }
-
-    return null;
   }
 
   private createGeminiStatus(): EmbeddingStatus {
@@ -216,17 +187,8 @@ export class EmbeddingProviderFactory {
     const allConfigs = providerManager.getAllConfigs();
 
     switch (type) {
-      case "paperchat": {
-        try {
-          return new PaperChatEmbedding();
-        } catch (error) {
-          ztoolkit.log(
-            "[EmbeddingProviderFactory] PaperChat embedding failed:",
-            getErrorMessage(error),
-          );
-        }
+      case "paperchat":
         return null;
-      }
 
       case "gemini": {
         const config = allConfigs.find(
