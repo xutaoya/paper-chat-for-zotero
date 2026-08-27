@@ -1477,7 +1477,6 @@ function createMessageActions(
   const copyContent =
     msg.role === "assistant"
       ? formatMarkdownForMessageCopy(msg.content, {
-          reasoning: msg.reasoning,
           evidenceRecords: msg.evidence,
         })
       : rawContent;
