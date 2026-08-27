@@ -27,6 +27,7 @@ import {
 import { HttpResponseError } from "./HttpResponseError";
 import { sanitizeOpenAIToolCallMessages } from "./openai-tool-call-messages";
 import { getErrorMessage } from "../../utils/common";
+import { extractReasoningTokensFromUsage } from "../../utils/apiUsage";
 
 export abstract class BaseProvider implements AIProvider {
   protected _config: ApiKeyProviderConfig;
@@ -128,7 +129,8 @@ export abstract class BaseProvider implements AIProvider {
     format: SSEFormat,
     callbacks: StreamCallbacks,
   ): Promise<void> {
-    const { onChunk, onReasoningChunk, onComplete, onError } = callbacks;
+    const { onChunk, onReasoningChunk, onUsageUpdate, onComplete, onError } =
+      callbacks;
     const reader = this.getResponseReader(response);
     let fullContent = "";
 
@@ -139,6 +141,14 @@ export abstract class BaseProvider implements AIProvider {
       },
       onReasoning: onReasoningChunk
         ? (text) => onReasoningChunk(text)
+        : undefined,
+      onUsage: onUsageUpdate
+        ? (usage) => {
+            const reasoningTokens = extractReasoningTokensFromUsage(usage);
+            if (reasoningTokens !== undefined) {
+              onUsageUpdate({ reasoningTokens });
+            }
+          }
         : undefined,
       onDone: () => onComplete(fullContent),
       onError,

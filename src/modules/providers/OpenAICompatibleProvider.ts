@@ -3,6 +3,7 @@
  */
 
 import { getErrorMessage } from "../../utils/common";
+import { extractReasoningTokensFromUsage } from "../../utils/apiUsage";
 import { BaseProvider } from "./BaseProvider";
 import type {
   ChatMessage,
@@ -355,6 +356,12 @@ export function applyExtraRequestBody(
 }
 
 export class OpenAICompatibleProvider extends BaseProvider {
+  private applyStreamingOptions(requestBody: Record<string, unknown>): void {
+    if (requestBody.stream === true) {
+      requestBody.stream_options = { include_usage: true };
+    }
+  }
+
   private applyGenerationOptions(requestBody: Record<string, unknown>): void {
     if (supportsOpenAITemperature(this._config)) {
       requestBody.temperature = this._config.temperature ?? 0.7;
@@ -430,6 +437,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         stream: true,
       };
       this.applyGenerationOptions(requestBody);
+      this.applyStreamingOptions(requestBody);
       applyExtraRequestBody(requestBody, this._config);
 
       const response = await fetch(`${this._config.baseUrl}/chat/completions`, {
@@ -537,6 +545,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
   ): Promise<{
     content: string;
     reasoning?: string;
+    reasoningTokens?: number;
     toolCalls?: ToolCall[];
     suppressedToolCall?: boolean;
     stopReason?: "tool_calls" | "end_turn" | "max_tokens" | "stop";
@@ -608,6 +617,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       usage?: unknown;
     };
     this.logUsage("tools", data.usage);
+    const reasoningTokens = extractReasoningTokensFromUsage(data.usage);
 
     const message = data.choices?.[0]?.message;
     const finishReason = data.choices?.[0]?.finish_reason;
@@ -655,6 +665,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         return {
           content: cleanContent,
           reasoning: message?.reasoning_content || undefined,
+          reasoningTokens,
           toolCalls: allowDsmlToolCalls ? xmlToolCalls : undefined,
           suppressedToolCall: !allowDsmlToolCalls,
           stopReason: normalizeOpenAIFinishReason(finishReason),
@@ -676,6 +687,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       return {
         content: dsmlFallback.cleanContent,
         reasoning: message?.reasoning_content || undefined,
+        reasoningTokens,
         toolCalls:
           structuredToolCalls && structuredToolCalls.length > 0
             ? structuredToolCalls
@@ -687,6 +699,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
     return {
       content: dsmlFallback.cleanContent,
       reasoning: message?.reasoning_content || undefined,
+      reasoningTokens,
       toolCalls: allowDsmlToolCalls ? structuredToolCalls : undefined,
       suppressedToolCall:
         dsmlFallback.suppressedToolCall ||
@@ -756,6 +769,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
     const {
       onTextDelta,
       onReasoningDelta,
+      onUsageUpdate,
       onToolCallStart,
       onToolCallDelta,
       onComplete,
@@ -789,6 +803,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       }
 
       this.applyGenerationOptions(requestBody);
+      this.applyStreamingOptions(requestBody);
       applyExtraRequestBody(requestBody, this._config);
 
       ztoolkit.log(
@@ -813,6 +828,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       // 累积状态
       let fullContent = "";
       let fullReasoning = "";
+      let reasoningTokens: number | undefined;
       const toolCallsMap = new Map<
         number,
         { id: string; name: string; arguments: string }
@@ -900,6 +916,15 @@ export class OpenAICompatibleProvider extends BaseProvider {
               }
               break;
 
+            case "usage_update": {
+              const reported = extractReasoningTokensFromUsage(event.usage);
+              if (reported !== undefined) {
+                reasoningTokens = reported;
+                onUsageUpdate?.({ reasoningTokens: reported });
+              }
+              break;
+            }
+
             case "tool_call_start":
               toolCallsMap.set(event.index, {
                 id: event.id,
@@ -959,6 +984,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       onComplete({
         content: dsmlFallback.cleanContent,
         reasoning: fullReasoning || undefined,
+        reasoningTokens,
         toolCalls:
           toolCalls.length > 0
             ? toolCalls

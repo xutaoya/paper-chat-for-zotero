@@ -164,6 +164,8 @@ export type FluentMessageId =
   | 'paperchat-chat-switch-to-floating'
   | 'paperchat-chat-switch-to-sidebar'
   | 'paperchat-chat-thinking'
+  | 'paperchat-chat-thinking-streaming'
+  | 'paperchat-chat-thinking-tokens'
   | 'paperchat-chat-toggle-panel-mode'
   | 'paperchat-chat-tool-group-earlier'
   | 'paperchat-chat-toolbar-button-tooltip'

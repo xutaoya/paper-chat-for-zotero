@@ -117,7 +117,11 @@ interface AgentRuntimeCallbacks {
   isSessionTracked: (session: ChatSession, runId?: number) => boolean;
   onRuntimeEvent?: (event: AgentRuntimeEvent) => void;
   onStreamingUpdate?: (content: string, messageId: string) => void;
-  onReasoningUpdate?: (reasoning: string, messageId: string) => void;
+  onReasoningUpdate?: (
+    reasoning: string,
+    messageId: string,
+    reasoningTokens?: number,
+  ) => void;
   onMessageUpdate?: (messages: ChatMessage[]) => void;
   onPdfAttached?: () => void;
   onMessageComplete?: () => void;
@@ -547,6 +551,10 @@ export class AgentRuntime {
           executeProviderRequest,
           refreshRoundToolsAfterProviderChange,
         );
+
+        if (result.reasoningTokens !== undefined) {
+          assistantMessage.reasoningTokens = result.reasoningTokens;
+        }
 
         this.ensureSessionTracked(sendingSession, sessionRunId);
 
@@ -1173,6 +1181,7 @@ export class AgentRuntime {
   ): Promise<{
     content: string;
     reasoning?: string;
+    reasoningTokens?: number;
     toolCalls?: ToolCall[];
     hostedWebSearches?: HostedWebSearchCall[];
     suppressedToolCall?: boolean;
@@ -1187,6 +1196,7 @@ export class AgentRuntime {
       new Promise<{
         content: string;
         reasoning?: string;
+        reasoningTokens?: number;
         toolCalls?: ToolCall[];
         hostedWebSearches?: HostedWebSearchCall[];
         suppressedToolCall?: boolean;
@@ -1341,6 +1351,29 @@ export class AgentRuntime {
               this.callbacks.onReasoningUpdate?.(
                 fullReasoning,
                 assistantMessage.id,
+                assistantMessage.reasoningTokens,
+              );
+            }
+          },
+          onUsageUpdate: ({ reasoningTokens }) => {
+            if (
+              !this.callbacks.isSessionTracked(sendingSession, sessionRunId) ||
+              reasoningTokens === undefined
+            ) {
+              return;
+            }
+            assistantMessage.reasoningTokens = reasoningTokens;
+            assistantMessage.streamingState = "in_progress";
+            this.messageCheckpointer.schedule(
+              sendingSession,
+              sessionRunId,
+              assistantMessage,
+            );
+            if (this.callbacks.isSessionActive(sendingSession)) {
+              this.callbacks.onReasoningUpdate?.(
+                assistantMessage.reasoning ?? "",
+                assistantMessage.id,
+                reasoningTokens,
               );
             }
           },
@@ -1421,6 +1454,8 @@ export class AgentRuntime {
             resolve({
               content: result.content,
               reasoning: result.reasoning || roundReasoning || undefined,
+              reasoningTokens:
+                result.reasoningTokens ?? assistantMessage.reasoningTokens,
               toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
               hostedWebSearches:
                 hostedWebSearches.size > 0

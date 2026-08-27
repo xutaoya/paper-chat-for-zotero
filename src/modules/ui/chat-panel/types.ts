@@ -102,7 +102,11 @@ export interface ChatPanelContext {
   callbacks?: {
     onMessageUpdate?: (messages: ChatMessage[]) => void;
     onStreamingUpdate?: (content: string, messageId: string) => void;
-    onReasoningUpdate?: (reasoning: string, messageId: string) => void;
+    onReasoningUpdate?: (
+      reasoning: string,
+      messageId: string,
+      reasoningTokens?: number,
+    ) => void;
     onError?: (error: Error) => void;
     onPdfAttached?: () => void;
     onMessageComplete?: () => void;

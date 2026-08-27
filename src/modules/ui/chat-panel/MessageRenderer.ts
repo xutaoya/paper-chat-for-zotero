@@ -33,6 +33,7 @@ import { isTerminalPresentationArtifact } from "../../chat/presentation-artifact
 import { selectChatMessagePresentations } from "../../chat/message-presentation";
 import { canSummarizeAssistantReply } from "./NoteSummaryActions";
 import { canQuoteAssistantReply } from "../../chat/quoted-messages";
+import { estimateTextTokens } from "../../../utils/tokens";
 
 export function getStreamingContentSelector(messageId: string): string {
   return `[data-streaming-content-for="${messageId}"]`;
@@ -46,6 +47,10 @@ export function getStreamingReasoningContainerSelector(
   messageId: string,
 ): string {
   return `[data-streaming-reasoning-container-for="${messageId}"]`;
+}
+
+export function getStreamingReasoningTokensSelector(messageId: string): string {
+  return `[data-streaming-reasoning-tokens-for="${messageId}"]`;
 }
 
 const CHAT_HISTORY_BOTTOM_STICKY_THRESHOLD = 24;
@@ -954,11 +959,19 @@ export function createMessageElement(
         theme,
         msg.reasoning,
         false,
+        msg.id,
+        msg.reasoningTokens,
       );
       bubble.appendChild(reasoningContainer);
     } else if (isLastAssistant && msg.streamingState === "in_progress") {
       // Streaming placeholder - hidden by default, shown when reasoning arrives
-      const reasoningContainer = createReasoningContainer(doc, theme, "", true);
+      const reasoningContainer = createReasoningContainer(
+        doc,
+        theme,
+        "",
+        true,
+        msg.id,
+      );
       reasoningContainer.setAttribute(
         "data-streaming-reasoning-container-for",
         msg.id,
@@ -1022,6 +1035,56 @@ export function createMessageElement(
   return wrapper;
 }
 
+function formatThinkingTokenLabel(tokenCount: number): string {
+  return getString("chat-thinking-tokens", {
+    args: { tokens: String(Math.max(0, Math.round(tokenCount))) },
+  });
+}
+
+function createReasoningTokenBadge(
+  doc: Document,
+  theme: ThemeColors,
+  tokenCount: number,
+  messageId?: string,
+): HTMLElement {
+  const badge = createElement(doc, "span", {
+    fontSize: "11px",
+    lineHeight: "1.4",
+    padding: "1px 6px",
+    borderRadius: "4px",
+    border: `1px solid ${theme.borderColor}`,
+    color: theme.textMuted,
+    background: theme.assistantBubbleBg,
+    flexShrink: "0",
+  });
+  if (messageId) {
+    badge.setAttribute("data-streaming-reasoning-tokens-for", messageId);
+  }
+  badge.textContent = formatThinkingTokenLabel(tokenCount);
+  badge.style.display = tokenCount > 0 ? "inline" : "none";
+  return badge;
+}
+
+export function updateStreamingReasoningTokens(
+  container: HTMLElement,
+  reasoning: string,
+  messageId: string,
+  apiReasoningTokens?: number,
+): void {
+  const tokenCount =
+    apiReasoningTokens !== undefined
+      ? apiReasoningTokens
+      : estimateTextTokens(reasoning);
+  const badge = container.querySelector(
+    getStreamingReasoningTokensSelector(messageId),
+  ) as HTMLElement | null;
+  if (!badge) {
+    return;
+  }
+  badge.textContent = formatThinkingTokenLabel(tokenCount);
+  badge.style.display = tokenCount > 0 ? "inline" : "none";
+}
+
 /**
  * Create a collapsible reasoning/thinking container
  * Uses inline styles only (Zotero's XHTML context doesn't reliably support <style> injection)
@@ -1031,6 +1094,8 @@ function createReasoningContainer(
   theme: ThemeColors,
   reasoning: string,
   isStreaming: boolean,
+  messageId?: string,
+  reasoningTokens?: number,
 ): HTMLElement {
   const container = createElement(doc, "div", {
     marginBottom: "8px",
@@ -1079,11 +1144,21 @@ function createReasoningContainer(
   });
 
   const label = createElement(doc, "span", {});
-  label.textContent = getString("chat-thinking");
+  label.textContent = isStreaming
+    ? getString("chat-thinking-streaming")
+    : getString("chat-thinking");
+
+  const tokenBadge = createReasoningTokenBadge(
+    doc,
+    theme,
+    reasoningTokens ?? estimateTextTokens(reasoning),
+    isStreaming ? messageId : undefined,
+  );
 
   header.appendChild(arrow);
   header.appendChild(thinkingIcon);
   header.appendChild(label);
+  header.appendChild(tokenBadge);
 
   // Body
   const body = createElement(doc, "div", {

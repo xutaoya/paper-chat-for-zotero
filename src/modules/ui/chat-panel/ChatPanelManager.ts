@@ -46,6 +46,7 @@ import {
   getStreamingContentSelector,
   getStreamingReasoningContainerSelector,
   getStreamingReasoningSelector,
+  updateStreamingReasoningTokens,
   renderMessages as renderMessageElementsBase,
   scrollChatHistoryToBottom,
   scrollToAndHighlightMessage,
@@ -2054,7 +2055,7 @@ function setupChatManagerCallbacks(
         );
       }
     },
-    onReasoningUpdate: (reasoning, messageId) => {
+    onReasoningUpdate: (reasoning, messageId, reasoningTokens) => {
       if (container) {
         refreshContextWindowUsageForContainer(container);
         const activeMessage = manager
@@ -2072,6 +2073,12 @@ function setupChatManagerCallbacks(
         );
         if (reasoningEl) {
           reasoningEl.textContent = reasoning;
+          updateStreamingReasoningTokens(
+            container,
+            reasoning,
+            messageId,
+            reasoningTokens ?? activeMessage.reasoningTokens,
+          );
           // Show the reasoning container when content arrives
           const reasoningContainer = container.querySelector(
             getStreamingReasoningContainerSelector(messageId),

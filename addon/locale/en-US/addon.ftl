@@ -220,6 +220,10 @@ paperchat-chat-turn-in-progress = A response is already in progress.
 
 paperchat-chat-thinking = Thinking
 
+paperchat-chat-thinking-streaming = Thinking...
+
+paperchat-chat-thinking-tokens = { $tokens } tokens
+
 paperchat-chat-history-title = Chat { $time }
 
 paperchat-guide-toolbar-title = Start Chatting with AI

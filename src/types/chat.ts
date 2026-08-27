@@ -50,6 +50,8 @@ export interface ChatMessage {
   role: "user" | "assistant" | "system" | "error" | "tool";
   content: string;
   reasoning?: string; // Reasoning/thinking chain (e.g. DeepSeek-Reasoner)
+  /** Provider-reported reasoning token usage when available. */
+  reasoningTokens?: number;
   images?: ImageAttachment[];
   files?: FileAttachment[];
   quotedMessages?: QuotedMessageRef[];
@@ -492,6 +494,7 @@ export type OpenAIMessageContent =
 export interface StreamCallbacks {
   onChunk: (chunk: string) => void;
   onReasoningChunk?: (chunk: string) => void;
+  onUsageUpdate?: (usage: { reasoningTokens?: number }) => void;
   onComplete: (fullContent: string, toolCalls?: ToolCall[]) => void;
   onError: (error: Error) => void;
 }
@@ -512,6 +515,7 @@ export interface HostedWebSearchCall {
 export interface StreamToolCallingResult {
   content: string;
   reasoning?: string;
+  reasoningTokens?: number;
   toolCalls?: ToolCall[];
   hostedWebSearches?: HostedWebSearchCall[];
   /** Provider returned tool protocol even though this round disabled tools. */
@@ -526,6 +530,9 @@ export interface StreamToolCallingCallbacks {
 
   /** Reasoning/thinking chain delta (e.g. DeepSeek-Reasoner) */
   onReasoningDelta?: (text: string) => void;
+
+  /** Provider usage updates (e.g. reasoning token count) */
+  onUsageUpdate?: (usage: { reasoningTokens?: number }) => void;
 
   /** Tool call 开始 */
   onToolCallStart: (toolCall: {

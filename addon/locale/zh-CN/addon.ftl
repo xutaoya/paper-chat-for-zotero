@@ -220,6 +220,10 @@ paperchat-chat-turn-in-progress = 当前回复仍在生成中。
 
 paperchat-chat-thinking = 思考中
 
+paperchat-chat-thinking-streaming = 思考中…
+
+paperchat-chat-thinking-tokens = { $tokens } tokens
+
 paperchat-chat-history-title = 对话 { $time }
 
 paperchat-guide-toolbar-title = 开始与 AI 对话

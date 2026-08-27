@@ -20,6 +20,7 @@ import type {
   ToolCallingOptions,
 } from "../../types/provider";
 import type { ToolDefinition, ToolCall } from "../../types/tool";
+import { extractReasoningTokensFromUsage } from "../../utils/apiUsage";
 import { parseSSEStreamWithToolCalling } from "./SSEParser";
 import { normalizeAnthropicStopReason } from "./stream-stop-reason";
 
@@ -287,6 +288,8 @@ export class AnthropicProvider extends BaseProvider {
     options?: ToolCallingOptions,
   ): Promise<{
     content: string;
+    reasoning?: string;
+    reasoningTokens?: number;
     toolCalls?: ToolCall[];
     stopReason?: "tool_calls" | "end_turn" | "max_tokens" | "stop";
   }> {
@@ -331,12 +334,15 @@ export class AnthropicProvider extends BaseProvider {
       content?: Array<{
         type: string;
         text?: string;
+        thinking?: string;
         id?: string;
         name?: string;
         input?: Record<string, unknown>;
       }>;
       stop_reason?: string;
+      usage?: unknown;
     };
+    const reasoningTokens = extractReasoningTokensFromUsage(data.usage);
 
     // Extract text content
     const textContent =
@@ -344,6 +350,12 @@ export class AnthropicProvider extends BaseProvider {
         ?.filter((block) => block.type === "text")
         .map((block) => block.text || "")
         .join("") || "";
+
+    const reasoningContent =
+      data.content
+        ?.filter((block) => block.type === "thinking")
+        .map((block) => block.thinking || block.text || "")
+        .join("") || undefined;
 
     // Extract tool calls
     const toolUseBlocks =
@@ -369,6 +381,8 @@ export class AnthropicProvider extends BaseProvider {
 
     return {
       content: textContent,
+      reasoning: reasoningContent || undefined,
+      reasoningTokens,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       stopReason: normalizeAnthropicStopReason(data.stop_reason),
     };
@@ -387,6 +401,8 @@ export class AnthropicProvider extends BaseProvider {
   ): Promise<void> {
     const {
       onTextDelta,
+      onReasoningDelta,
+      onUsageUpdate,
       onToolCallStart,
       onToolCallDelta,
       onComplete,
@@ -436,6 +452,8 @@ export class AnthropicProvider extends BaseProvider {
 
       // 累积状态
       let fullContent = "";
+      let fullReasoning = "";
+      let reasoningTokens: number | undefined;
       const toolCallsMap = new Map<
         number,
         { id: string; name: string; arguments: string }
@@ -449,6 +467,20 @@ export class AnthropicProvider extends BaseProvider {
               fullContent += event.text;
               onTextDelta(event.text);
               break;
+
+            case "reasoning_delta":
+              fullReasoning += event.text;
+              onReasoningDelta?.(event.text);
+              break;
+
+            case "usage_update": {
+              const reported = extractReasoningTokensFromUsage(event.usage);
+              if (reported !== undefined) {
+                reasoningTokens = reported;
+                onUsageUpdate?.({ reasoningTokens: reported });
+              }
+              break;
+            }
 
             case "tool_call_start":
               toolCallsMap.set(event.index, {
@@ -498,6 +530,8 @@ export class AnthropicProvider extends BaseProvider {
 
       onComplete({
         content: fullContent,
+        reasoning: fullReasoning || undefined,
+        reasoningTokens,
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         stopReason: stopReason as
           | "tool_calls"

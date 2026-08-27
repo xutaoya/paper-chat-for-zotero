@@ -19,6 +19,7 @@ export type SSEFormat = "openai" | "anthropic" | "gemini";
 export interface SSEParserCallbacks {
   onText: (text: string) => void;
   onReasoning?: (text: string) => void;
+  onUsage?: (usage: unknown) => void;
   onDone: () => void;
   onError?: (error: Error) => void;
 }
@@ -28,6 +29,7 @@ export interface SSEParserCallbacks {
 export type SSEToolCallingEvent =
   | { type: "text_delta"; text: string }
   | { type: "reasoning_delta"; text: string }
+  | { type: "usage_update"; usage: unknown }
   | { type: "tool_call_start"; index: number; id: string; name: string }
   | { type: "tool_call_delta"; index: number; argumentsDelta: string }
   | { type: "done"; stopReason: string }
@@ -40,6 +42,7 @@ export interface SSEToolCallingCallbacks {
 // ============ OpenAI 响应类型 ============
 
 interface OpenAIStreamDelta {
+  usage?: unknown;
   choices?: Array<{
     delta?: {
       content?: string | null;
@@ -64,6 +67,7 @@ interface OpenAIStreamDelta {
 interface AnthropicStreamEvent {
   type: string;
   index?: number;
+  usage?: unknown;
   content_block?: {
     type: string;
     id?: string;
@@ -74,6 +78,7 @@ interface AnthropicStreamEvent {
   delta?: {
     type?: string;
     text?: string;
+    thinking?: string;
     partial_json?: string;
     stop_reason?: string;
   };
@@ -136,10 +141,15 @@ const contentExtractors: Record<SSEFormat, (parsed: unknown) => string | null> =
 function parseOpenAIToolCallingEvents(parsed: unknown): SSEToolCallingEvent[] {
   const data = parsed as OpenAIStreamDelta;
   const choice = data.choices?.[0];
-
-  if (!choice) return [];
-
   const events: SSEToolCallingEvent[] = [];
+
+  if (!choice) {
+    if (data.usage) {
+      events.push({ type: "usage_update", usage: data.usage });
+    }
+    return events;
+  }
+
   const delta = choice.delta;
 
   if (delta) {
@@ -181,6 +191,10 @@ function parseOpenAIToolCallingEvents(parsed: unknown): SSEToolCallingEvent[] {
       type: "done",
       stopReason: normalizeOpenAIFinishReason(choice.finish_reason),
     });
+  }
+
+  if (data.usage) {
+    events.push({ type: "usage_update", usage: data.usage });
   }
 
   return events;
@@ -225,6 +239,10 @@ function parseAnthropicToolCallingEvents(
   if (data.type === "content_block_delta") {
     const delta = data.delta;
 
+    if (delta?.type === "thinking_delta" && delta.thinking) {
+      return [{ type: "reasoning_delta", text: delta.thinking }];
+    }
+
     // 文本增量
     if (delta?.type === "text_delta" && delta.text) {
       return [{ type: "text_delta", text: delta.text }];
@@ -244,15 +262,18 @@ function parseAnthropicToolCallingEvents(
 
   // 消息结束
   if (data.type === "message_delta") {
+    const events: SSEToolCallingEvent[] = [];
+    if (data.usage) {
+      events.push({ type: "usage_update", usage: data.usage });
+    }
     const stopReason = data.delta?.stop_reason;
     if (stopReason) {
-      return [
-        {
-          type: "done",
-          stopReason: normalizeAnthropicStopReason(stopReason),
-        },
-      ];
+      events.push({
+        type: "done",
+        stopReason: normalizeAnthropicStopReason(stopReason),
+      });
     }
+    return events;
   }
 
   // message_stop 作为备用完成信号
@@ -278,7 +299,7 @@ export async function parseSSEStream(
   format: SSEFormat,
   callbacks: SSEParserCallbacks,
 ): Promise<void> {
-  const { onText, onReasoning, onDone, onError } = callbacks;
+  const { onText, onReasoning, onUsage, onDone, onError } = callbacks;
   const extractContent = contentExtractors[format];
   const decoder = new TextDecoder();
   let buffer = "";
@@ -305,6 +326,31 @@ export async function parseSSEStream(
 
         try {
           const parsed = JSON.parse(data);
+
+          if (format === "openai" && onUsage) {
+            const openaiUsage = (parsed as OpenAIStreamDelta).usage;
+            if (openaiUsage) {
+              onUsage(openaiUsage);
+            }
+          }
+
+          if (format === "anthropic" && onReasoning) {
+            const anthropicData = parsed as AnthropicStreamEvent;
+            if (
+              anthropicData.type === "content_block_delta" &&
+              anthropicData.delta?.type === "thinking_delta" &&
+              anthropicData.delta.thinking
+            ) {
+              onReasoning(anthropicData.delta.thinking);
+            }
+          }
+
+          if (format === "anthropic" && onUsage) {
+            const anthropicData = parsed as AnthropicStreamEvent;
+            if (anthropicData.type === "message_delta" && anthropicData.usage) {
+              onUsage(anthropicData.usage);
+            }
+          }
 
           // For OpenAI format, check reasoning_content before regular content
           if (format === "openai" && onReasoning) {

@@ -260,7 +260,11 @@ export class ChatManager {
   // UI回调
   private onMessageUpdate?: (messages: ChatMessage[]) => void;
   private onStreamingUpdate?: (content: string, messageId: string) => void;
-  private onReasoningUpdate?: (reasoning: string, messageId: string) => void;
+  private onReasoningUpdate?: (
+    reasoning: string,
+    messageId: string,
+    reasoningTokens?: number,
+  ) => void;
   private onError?: (error: Error) => void;
   private onPdfAttached?: () => void;
   private onMessageComplete?: () => void;
@@ -285,8 +289,8 @@ export class ChatManager {
           this.isSessionTracked(session, runId),
         onStreamingUpdate: (content, messageId) =>
           this.onStreamingUpdate?.(content, messageId),
-        onReasoningUpdate: (reasoning, messageId) =>
-          this.onReasoningUpdate?.(reasoning, messageId),
+        onReasoningUpdate: (reasoning, messageId, reasoningTokens) =>
+          this.onReasoningUpdate?.(reasoning, messageId, reasoningTokens),
         onMessageUpdate: (messages) => this.onMessageUpdate?.(messages),
         onPdfAttached: () => this.onPdfAttached?.(),
         onMessageComplete: () => this.onMessageComplete?.(),
@@ -648,7 +652,11 @@ export class ChatManager {
   setCallbacks(callbacks: {
     onMessageUpdate?: (messages: ChatMessage[]) => void;
     onStreamingUpdate?: (content: string, messageId: string) => void;
-    onReasoningUpdate?: (reasoning: string, messageId: string) => void;
+    onReasoningUpdate?: (
+      reasoning: string,
+      messageId: string,
+      reasoningTokens?: number,
+    ) => void;
     onError?: (error: Error) => void;
     onPdfAttached?: () => void;
     onMessageComplete?: () => void;
@@ -2152,6 +2160,24 @@ export class ChatManager {
                       this.onReasoningUpdate?.(
                         assistantMessage.reasoning,
                         assistantMessage.id,
+                        assistantMessage.reasoningTokens,
+                      );
+                    }
+                  },
+                  onUsageUpdate: ({ reasoningTokens }) => {
+                    if (
+                      !this.isSessionTracked(sendingSession, sessionRunId) ||
+                      reasoningTokens === undefined
+                    ) {
+                      return;
+                    }
+                    assistantMessage.reasoningTokens = reasoningTokens;
+                    scheduleCheckpoint();
+                    if (this.isSessionActive(sendingSession)) {
+                      this.onReasoningUpdate?.(
+                        assistantMessage.reasoning ?? "",
+                        assistantMessage.id,
+                        reasoningTokens,
                       );
                     }
                   },
