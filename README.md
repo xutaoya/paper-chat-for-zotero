@@ -1,4 +1,4 @@
-<h1><img src="addon/content/icons/favicon.svg" width="32" height="32" alt="" style="vertical-align: middle;"> AI 论文对话 (xutao)</h1>
+<h1><img src="addon/content/icons/favicon.svg" width="32" height="32" alt="" style="vertical-align: middle;"> 论文智读 (PaperMind)</h1>
 
 基于 [syt2/paper-chat-for-zotero](https://github.com/syt2/paper-chat-for-zotero) 的个人二创 fork。上游是完整的 Zotero AI 论文助手；本仓库只保留我日常读文献真正用到的部分，并做了少量改动。与上游插件 ID 不同，可与原版并存安装。
 
@@ -59,7 +59,17 @@ npm start
 1. 在 Zotero 中打开 PDF，点击工具栏聊天图标
 2. 输入问题；需要全文上下文时勾选附加 PDF；框选图表可截图提问
 3. 底部快捷按钮可一键触发常用 prompt（讲解、标注、打标签等）
-4. 设置 → **AI 论文对话 (xutao)**：配置 API Key、选择模型、MinerU Token
+4. 设置 → **论文智读**：配置 API Key、选择模型、MinerU Token
+
+### 在线更新
+
+插件启动时会自动检查更新（生产构建）。发布新版本：
+
+```bash
+npm run release
+```
+
+会创建 GitHub Release（标签 `V版本号`），并更新 `release` 标签下的 `update.json`。用户无需手动重装。
 
 ## 许可证
 
