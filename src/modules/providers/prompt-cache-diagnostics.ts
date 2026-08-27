@@ -14,6 +14,7 @@ export interface PromptCacheUsage {
 }
 
 const previousRequestByKey = new Map<string, string>();
+const previousRequestBodyByKey = new Map<string, Record<string, unknown>>();
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return (
@@ -67,7 +68,9 @@ export function recordPromptCacheRequestShape(params: {
   const key = `${params.providerId}:${params.model}:${params.requestKind}`;
   const current = stablePromptCacheStringify(params.requestBody);
   const previous = previousRequestByKey.get(key);
+  const previousBody = previousRequestBodyByKey.get(key);
   previousRequestByKey.set(key, current);
+  previousRequestBodyByKey.set(key, params.requestBody);
 
   const estimatedTokens = estimatePromptCacheTokens(current);
   if (!previous) {
@@ -80,21 +83,51 @@ export function recordPromptCacheRequestShape(params: {
     return;
   }
 
-  const commonPrefixChars = countCommonPrefixChars(previous, current);
+  if (previousBody) {
+    logVolatilePromptCacheFieldDiff(
+      key,
+      "model",
+      previousBody.model,
+      params.requestBody.model,
+    );
+    logVolatilePromptCacheFieldDiff(
+      key,
+      "tool_choice",
+      previousBody.tool_choice,
+      params.requestBody.tool_choice,
+    );
+    logVolatilePromptCacheFieldDiff(
+      key,
+      "tools",
+      previousBody.tools,
+      params.requestBody.tools,
+    );
+  }
+
+  const previousMessages = stablePromptCacheStringify({
+    messages: previousBody?.messages,
+  });
+  const currentMessages = stablePromptCacheStringify({
+    messages: params.requestBody.messages,
+  });
+  const commonPrefixChars = countCommonPrefixChars(
+    previousMessages,
+    currentMessages,
+  );
   const commonPrefixTokens = estimatePromptCacheTokens(
-    current.slice(0, commonPrefixChars),
+    currentMessages.slice(0, commonPrefixChars),
   );
   const ratio =
-    current.length > 0
-      ? Math.round((commonPrefixChars / current.length) * 1000) / 10
+    currentMessages.length > 0
+      ? Math.round((commonPrefixChars / currentMessages.length) * 1000) / 10
       : 100;
   ztoolkit.log(
     "[PromptCache] prefix",
     key,
-    `stable=${ratio}%`,
-    `commonChars=${commonPrefixChars}/${current.length}`,
-    `commonTokens~${commonPrefixTokens}/${estimatedTokens}`,
-    `firstDiff=${findFirstDifferenceDetails(previous, current)}`,
+    `messagesStable=${ratio}%`,
+    `commonChars=${commonPrefixChars}/${currentMessages.length}`,
+    `commonTokens~${commonPrefixTokens}/${estimatePromptCacheTokens(currentMessages)}`,
+    `firstDiff=${findFirstDifferenceDetails(previousMessages, currentMessages)}`,
   );
 }
 
@@ -199,6 +232,26 @@ function estimatePromptCacheTokens(text: string): number {
   const cjkChars = cjkMatches?.length ?? 0;
   const otherChars = text.length - cjkChars;
   return Math.ceil(cjkChars / 1.5 + otherChars / 4);
+}
+
+function logVolatilePromptCacheFieldDiff(
+  key: string,
+  field: string,
+  previousValue: unknown,
+  currentValue: unknown,
+): void {
+  const previous = stablePromptCacheStringify(previousValue ?? null);
+  const current = stablePromptCacheStringify(currentValue ?? null);
+  if (previous === current) {
+    return;
+  }
+  ztoolkit.log(
+    "[PromptCache] volatile",
+    key,
+    `${field}Changed=true`,
+    `prev=${summarizeText(previous)}`,
+    `curr=${summarizeText(current)}`,
+  );
 }
 
 function findFirstDifferenceDetails(

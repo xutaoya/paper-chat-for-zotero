@@ -2,6 +2,7 @@ import { assert } from "chai";
 import { createPresentationLaunchAuthorization } from "../src/modules/presentation/PresentationLaunchAuthorization.ts";
 import {
   AgentRuntime,
+  resolveAllowedToolNamesForRound,
   retainCompletedApiOnlyModelContextMessagesForTurn,
 } from "../src/modules/chat/agent-runtime/AgentRuntime.ts";
 import { ExecutionPlanManager } from "../src/modules/chat/agent-runtime/ExecutionPlanManager.ts";
@@ -1017,12 +1018,12 @@ describe("agent runtime plan semantics", function () {
 
     try {
       assert.deepEqual(await runTransition(false), [
-        ["search_items"],
         ["web_search", "search_items"],
+        ["web_search", "search_scholarly_sources", "search_items"],
       ]);
       assert.deepEqual(await runTransition(true), [
+        ["web_search", "search_scholarly_sources", "search_items"],
         ["web_search", "search_items"],
-        ["search_items"],
       ]);
     } finally {
       (globalThis as { ztoolkit?: unknown }).ztoolkit = originalZtoolkit;
@@ -1417,7 +1418,7 @@ describe("agent runtime plan semantics", function () {
               options: { toolChoice?: string } | undefined,
             ) => {
               providerCalls += 1;
-              if (options?.toolChoice === "none") {
+              if (providerCalls >= 2) {
                 return { content: "final answer" };
               }
               return {
@@ -2791,7 +2792,10 @@ describe("agent runtime plan semantics", function () {
         "web_search",
         "search_scholarly_sources",
       ]);
-      assert.deepEqual(receivedToolNames[1], ["web_search"]);
+      assert.deepEqual(receivedToolNames[1], [
+        "web_search",
+        "search_scholarly_sources",
+      ]);
       assert.equal(localExecutions, 1);
       assert.include(assistantMessage.content, "final answer");
       assert.equal(
@@ -2811,7 +2815,7 @@ describe("agent runtime plan semantics", function () {
     }
   });
 
-  it("removes both local search tools for a non-hosted provider after local budget exhaustion", function () {
+  it("keeps request tools stable while gating exhausted search tools at execution", function () {
     const runtime = new AgentRuntime({} as any, {} as any, {} as any) as any;
     const session = createSession();
     session.toolExecutionState = {
@@ -2871,8 +2875,18 @@ describe("agent runtime plan semantics", function () {
 
     assert.deepEqual(
       control.toolsForRound.map((tool: ToolDefinition) => tool.function.name),
-      ["search_items"],
+      ["web_search", "search_scholarly_sources", "search_items"],
     );
+    assert.equal(control.toolChoice, "auto");
+
+    const allowed = resolveAllowedToolNamesForRound({
+      tools,
+      session,
+      budgetLimits: { maxFullTextCallsPerTurn: 1, maxWebSearchCallsPerTurn: 1 },
+      supportsHostedWebSearch: false,
+      forceFinalAnswer: false,
+    });
+    assert.deepEqual([...allowed], ["search_items"]);
   });
 
   it("does not replay a completed tool when later streaming retries are exhausted", async function () {
@@ -3391,7 +3405,7 @@ describe("agent runtime plan semantics", function () {
         sendingSession: session,
       });
 
-      assert.equal(receivedToolChoice, "none");
+      assert.equal(receivedToolChoice, "auto");
       assert.equal(session.executionPlan?.status, "failed");
       assert.equal(
         assistantMessage.content,
@@ -3950,7 +3964,7 @@ describe("agent runtime plan semantics", function () {
         { sourceItemKey: "ITEM-1" },
         { sourceItemKey: "ITEM-1" },
       ]);
-      assert.deepEqual(toolChoices, ["auto", "auto", "none"]);
+      assert.deepEqual(toolChoices, ["auto", "auto", "auto"]);
       const finalPrompt = providerMessageSnapshots[2]
         .map((message) => message.content)
         .join("\n");
@@ -4156,7 +4170,7 @@ describe("agent runtime plan semantics", function () {
       ) => {
         providerCalls += 1;
         toolChoices.push(options.toolChoice || "");
-        if (options.toolChoice === "none") {
+        if (providerCalls >= 4) {
           return {
             content: "三次生成均未通过质量校验，本轮未写出 PPTX。",
           };
@@ -4199,7 +4213,7 @@ describe("agent runtime plan semantics", function () {
 
       assert.equal(providerCalls, 4);
       assert.equal(presentationExecutions, 3);
-      assert.deepEqual(toolChoices, ["auto", "auto", "auto", "none"]);
+      assert.deepEqual(toolChoices, ["auto", "auto", "auto", "auto"]);
       assert.equal(
         assistantMessage.content,
         "<presentation /><presentation /><presentation />三次生成均未通过质量校验，本轮未写出 PPTX。",

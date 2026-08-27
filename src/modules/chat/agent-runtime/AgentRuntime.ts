@@ -111,6 +111,11 @@ import type {
   PresentationCardProgress,
   PresentationProgressUpdate,
 } from "../../presentation/contracts";
+import {
+  buildCacheCheckpointMessage,
+  buildRuntimeContextMessage,
+  formatRuntimeContextUserContent,
+} from "../prompt-cache-messages";
 
 interface AgentRuntimeCallbacks {
   isSessionActive: (session: ChatSession) => boolean;
@@ -522,7 +527,7 @@ export class AgentRuntime {
         );
         if (iterationControl.forceFinalAnswer) {
           ztoolkit.log(
-            `[${logPrefix}] Final synthesis iteration ${iteration}/${maxIterations}; tools disabled for this round`,
+            `[${logPrefix}] Final synthesis iteration ${iteration}/${maxIterations}; tool calls suppressed via runtime directive`,
           );
         }
 
@@ -530,13 +535,15 @@ export class AgentRuntime {
         const refreshRoundToolsAfterProviderChange = () =>
           this.refreshIterationToolsForProvider(
             iterationControl,
-            iteration,
             tools,
-            maxIterations,
-            sendingSession,
-            budgetLimits,
-            provider.supportsHostedWebSearch?.() === true,
           );
+        const allowedToolNames = resolveAllowedToolNamesForRound({
+          tools,
+          session: sendingSession,
+          budgetLimits,
+          supportsHostedWebSearch: provider.supportsHostedWebSearch?.() === true,
+          forceFinalAnswer: iterationControl.forceFinalAnswer,
+        });
         const result = await this.runStreamingRound(
           provider,
           currentMessages,
@@ -548,6 +555,7 @@ export class AgentRuntime {
           displayBeforeThisRound,
           iteration,
           iterationControl.toolChoice,
+          iterationControl.forceFinalAnswer,
           executeProviderRequest,
           refreshRoundToolsAfterProviderChange,
         );
@@ -599,9 +607,7 @@ export class AgentRuntime {
             currentItemKey,
             lockedToolItemKey,
             currentItemLibraryID,
-            allowedToolNames: new Set(
-              iterationControl.toolsForRound.map((tool) => tool.function.name),
-            ),
+            allowedToolNames,
             selectedSearchScope,
             noteSummaryContext,
             executeProviderRequest,
@@ -735,6 +741,7 @@ export class AgentRuntime {
               continuationDisplayBase,
               iteration,
               iterationControl.toolChoice,
+              iterationControl.forceFinalAnswer,
               executeProviderRequest,
               refreshRoundToolsAfterProviderChange,
             ),
@@ -875,11 +882,18 @@ export class AgentRuntime {
         );
         if (iterationControl.forceFinalAnswer) {
           ztoolkit.log(
-            `[${logPrefix}] Final synthesis iteration ${iteration}/${maxIterations}; tools disabled for this round`,
+            `[${logPrefix}] Final synthesis iteration ${iteration}/${maxIterations}; tool calls suppressed via runtime directive`,
           );
         }
 
-        const result = await executeProviderRequest(
+        const allowedToolNames = resolveAllowedToolNamesForRound({
+          tools,
+          session: sendingSession,
+          budgetLimits,
+          supportsHostedWebSearch: provider.supportsHostedWebSearch?.() === true,
+          forceFinalAnswer: iterationControl.forceFinalAnswer,
+        });
+        const rawResult = await executeProviderRequest(
           () =>
             provider.chatCompletionWithTools(
               currentMessages,
@@ -890,15 +904,11 @@ export class AgentRuntime {
               },
             ),
           () =>
-            this.refreshIterationToolsForProvider(
-              iterationControl,
-              iteration,
-              tools,
-              maxIterations,
-              sendingSession,
-              budgetLimits,
-              provider.supportsHostedWebSearch?.() === true,
-            ),
+            this.refreshIterationToolsForProvider(iterationControl, tools),
+        );
+        const result = suppressToolCallsInRoundResult(
+          rawResult,
+          iterationControl.forceFinalAnswer,
         );
 
         this.ensureSessionTracked(sendingSession, sessionRunId);
@@ -942,9 +952,7 @@ export class AgentRuntime {
             currentItemKey,
             lockedToolItemKey,
             currentItemLibraryID,
-            allowedToolNames: new Set(
-              iterationControl.toolsForRound.map((tool) => tool.function.name),
-            ),
+            allowedToolNames,
             selectedSearchScope,
             noteSummaryContext,
             executeProviderRequest,
@@ -1066,27 +1074,25 @@ export class AgentRuntime {
           initialHostedWebSearchDisplay: hostedWebSearchDisplay,
           currentMessages,
           sendingSession,
-          requestNext: () =>
-            executeProviderRequest(
-              () =>
-                provider.chatCompletionWithTools(
-                  currentMessages,
-                  iterationControl.toolsForRound,
-                  abortSignal,
-                  {
-                    toolChoice: iterationControl.toolChoice,
-                  },
-                ),
-              () =>
-                this.refreshIterationToolsForProvider(
-                  iterationControl,
-                  iteration,
-                  tools,
-                  maxIterations,
-                  sendingSession,
-                  budgetLimits,
-                  provider.supportsHostedWebSearch?.() === true,
-                ),
+          requestNext: async () =>
+            suppressToolCallsInRoundResult(
+              await executeProviderRequest(
+                () =>
+                  provider.chatCompletionWithTools(
+                    currentMessages,
+                    iterationControl.toolsForRound,
+                    abortSignal,
+                    {
+                      toolChoice: iterationControl.toolChoice,
+                    },
+                  ),
+                () =>
+                  this.refreshIterationToolsForProvider(
+                    iterationControl,
+                    tools,
+                  ),
+              ),
+              iterationControl.forceFinalAnswer,
             ),
         });
 
@@ -1176,6 +1182,7 @@ export class AgentRuntime {
     displayBeforeThisRound: string,
     iteration: number,
     toolChoice: "auto" | "none",
+    suppressToolCalls: boolean,
     executeProviderRequest: ProviderRequestExecutor,
     onProviderRerouted: () => void,
   ): Promise<{
@@ -1451,22 +1458,27 @@ export class AgentRuntime {
               result.toolCalls && result.toolCalls.length > 0
                 ? result.toolCalls
                 : streamedToolCalls;
-            resolve({
-              content: result.content,
-              reasoning: result.reasoning || roundReasoning || undefined,
-              reasoningTokens:
-                result.reasoningTokens ?? assistantMessage.reasoningTokens,
-              toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-              hostedWebSearches:
-                hostedWebSearches.size > 0
-                  ? [...hostedWebSearches.entries()].map(([id, search]) => ({
-                      id,
-                      ...search,
-                    }))
-                  : undefined,
-              suppressedToolCall: result.suppressedToolCall,
-              stopReason,
-            });
+            resolve(
+              suppressToolCallsInRoundResult(
+                {
+                  content: result.content,
+                  reasoning: result.reasoning || roundReasoning || undefined,
+                  reasoningTokens:
+                    result.reasoningTokens ?? assistantMessage.reasoningTokens,
+                  toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+                  hostedWebSearches:
+                    hostedWebSearches.size > 0
+                      ? [...hostedWebSearches.entries()].map(([id, search]) => ({
+                          id,
+                          ...search,
+                        }))
+                      : undefined,
+                  suppressedToolCall: result.suppressedToolCall,
+                  stopReason,
+                },
+                suppressToolCalls,
+              ),
+            );
           },
           onError: rejectAttempt,
         };
@@ -3344,62 +3356,27 @@ export class AgentRuntime {
     iteration: number,
     tools: ToolDefinition[],
     maxIterations: number,
-    session: ChatSession,
-    budgetLimits: ToolBudgetLimits,
-    supportsHostedWebSearch: boolean,
+    _session: ChatSession,
+    _budgetLimits: ToolBudgetLimits,
+    _supportsHostedWebSearch: boolean,
   ): IterationControlState {
     const remainingIterations = maxIterations - iteration + 1;
     const forceFinalAnswer = remainingIterations === 1;
-    const searchBudget = createToolBudgetState(
-      session.toolExecutionState?.results || [],
-    );
-    const remainingSearchCalls = Math.max(
-      0,
-      budgetLimits.maxWebSearchCallsPerTurn - searchBudget.webSearchCalls,
-    );
-    const toolsForRound =
-      remainingSearchCalls === 0
-        ? tools.filter((tool) => {
-            if (tool.function.name === "search_scholarly_sources") {
-              return false;
-            }
-            return !(
-              tool.function.name === "web_search" && !supportsHostedWebSearch
-            );
-          })
-        : tools;
     return {
       currentIteration: iteration,
       remainingIterations,
       maxIterations,
       forceFinalAnswer,
-      toolsForRound: forceFinalAnswer ? [] : toolsForRound,
-      toolChoice: forceFinalAnswer ? "none" : "auto",
+      toolsForRound: tools,
+      toolChoice: "auto",
     };
   }
 
   private refreshIterationToolsForProvider(
     iterationControl: IterationControlState,
-    iteration: number,
     tools: ToolDefinition[],
-    maxIterations: number,
-    session: ChatSession,
-    budgetLimits: ToolBudgetLimits,
-    supportsHostedWebSearch: boolean,
   ): void {
-    const refreshed = this.createIterationControl(
-      iteration,
-      tools,
-      maxIterations,
-      session,
-      budgetLimits,
-      supportsHostedWebSearch,
-    );
-    iterationControl.toolsForRound.splice(
-      0,
-      iterationControl.toolsForRound.length,
-      ...refreshed.toolsForRound,
-    );
+    iterationControl.toolsForRound = tools;
   }
 
   private getMaxIterations(): number {
@@ -3456,7 +3433,9 @@ export class AgentRuntime {
       currentRuntimeIndex === currentCheckpointIndex + 1 &&
       currentRuntimeIndex === currentMessages.length - 1
     ) {
-      currentMessages[currentRuntimeIndex].content = content;
+      currentMessages[currentRuntimeIndex].content =
+        formatRuntimeContextUserContent(content);
+      currentMessages[currentRuntimeIndex].role = "user";
       currentMessages[currentRuntimeIndex].timestamp = Date.now();
       return;
     }
@@ -3469,19 +3448,8 @@ export class AgentRuntime {
       }
     }
 
-    currentMessages.push({
-      id: "cache-checkpoint",
-      role: "system",
-      content:
-        "Prompt cache checkpoint. This is not user content or an instruction.",
-      timestamp: Date.now(),
-    });
-    currentMessages.push({
-      id: "runtime-context",
-      role: "system",
-      content,
-      timestamp: Date.now(),
-    });
+    currentMessages.push(buildCacheCheckpointMessage());
+    currentMessages.push(buildRuntimeContextMessage(content));
   }
 
   private prepareMessagesForModel(
@@ -3489,7 +3457,9 @@ export class AgentRuntime {
     provider: ToolCallingProvider,
   ): void {
     const strategy = getToolContextStrategy(provider);
-    compactOlderToolResultMessages(currentMessages, strategy.compactionPolicy);
+    if (strategy.compactionPolicy.stripAssistantToolCards) {
+      stripAssistantToolCallCards(currentMessages);
+    }
   }
 
   private emitRuntimeEvent<T extends AgentRuntimeEventType>(
@@ -3997,39 +3967,6 @@ function hasApiOnlyModelContextMessages(session: ChatSession): boolean {
   return session.messages.some((message) => message.apiOnly);
 }
 
-function compactOlderToolResultMessages(
-  messages: ChatMessage[],
-  policy: ToolResultCompactionPolicy,
-): void {
-  if (policy.stripAssistantToolCards) {
-    stripAssistantToolCallCards(messages);
-  }
-
-  const toolMessageIndexes = messages
-    .map((message, index) => ({ message, index }))
-    .filter(({ message }) => message.role === "tool")
-    .map(({ index }) => index);
-  const keepFull = new Set(
-    policy.keepFullCount > 0
-      ? toolMessageIndexes.slice(-policy.keepFullCount)
-      : [],
-  );
-
-  for (const index of toolMessageIndexes) {
-    if (keepFull.has(index)) {
-      continue;
-    }
-    const message = messages[index];
-    if (message.content.startsWith(TOOL_RESULT_COMPACTED_PREFIX)) {
-      continue;
-    }
-    if (message.content.length <= policy.compactCharLimit) {
-      continue;
-    }
-    message.content = compactToolResultContent(message.content, policy);
-  }
-}
-
 function stripAssistantToolCallCards(messages: ChatMessage[]): void {
   for (const message of messages) {
     if (
@@ -4240,4 +4177,53 @@ function toPlanStepStatus(
     default:
       return "failed";
   }
+}
+
+export function resolveAllowedToolNamesForRound(params: {
+  tools: ToolDefinition[];
+  session: ChatSession;
+  budgetLimits: ToolBudgetLimits;
+  supportsHostedWebSearch: boolean;
+  forceFinalAnswer: boolean;
+}): Set<string> {
+  if (params.forceFinalAnswer) {
+    return new Set();
+  }
+
+  const searchBudget = createToolBudgetState(
+    params.session.toolExecutionState?.results || [],
+  );
+  const remainingSearchCalls = Math.max(
+    0,
+    params.budgetLimits.maxWebSearchCallsPerTurn - searchBudget.webSearchCalls,
+  );
+  const allowedTools =
+    remainingSearchCalls === 0
+      ? params.tools.filter((tool) => {
+          if (tool.function.name === "search_scholarly_sources") {
+            return false;
+          }
+          return !(
+            tool.function.name === "web_search" &&
+            !params.supportsHostedWebSearch
+          );
+        })
+      : params.tools;
+  return new Set(allowedTools.map((tool) => tool.function.name));
+}
+
+function suppressToolCallsInRoundResult<
+  T extends {
+    toolCalls?: ToolCall[];
+    suppressedToolCall?: boolean;
+  },
+>(result: T, suppressToolCalls: boolean): T {
+  if (!suppressToolCalls || !result.toolCalls?.length) {
+    return result;
+  }
+  return {
+    ...result,
+    toolCalls: undefined,
+    suppressedToolCall: true,
+  };
 }

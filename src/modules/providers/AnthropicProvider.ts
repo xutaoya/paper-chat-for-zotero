@@ -47,6 +47,7 @@ export class AnthropicProvider extends BaseProvider {
         messages,
         pdfAttachment,
       );
+      const systemBlocks = this.buildAnthropicSystemBlocks(messages);
 
       const response = await fetch(`${this._config.baseUrl}/messages`, {
         method: "POST",
@@ -58,7 +59,7 @@ export class AnthropicProvider extends BaseProvider {
         body: JSON.stringify({
           model: this._config.defaultModel,
           max_tokens: this._config.maxTokens || 8192,
-          system: this._config.systemPrompt || undefined,
+          system: systemBlocks.length > 0 ? systemBlocks : undefined,
           messages: anthropicMessages,
           stream: true,
         }),
@@ -81,6 +82,7 @@ export class AnthropicProvider extends BaseProvider {
     }
 
     const anthropicMessages = this.formatAnthropicMessages(messages);
+    const systemBlocks = this.buildAnthropicSystemBlocks(messages);
 
     const response = await fetch(`${this._config.baseUrl}/messages`, {
       method: "POST",
@@ -92,7 +94,7 @@ export class AnthropicProvider extends BaseProvider {
       body: JSON.stringify({
         model: this._config.defaultModel,
         max_tokens: this._config.maxTokens || 8192,
-        system: this._config.systemPrompt || undefined,
+        system: systemBlocks.length > 0 ? systemBlocks : undefined,
         messages: anthropicMessages,
       }),
       signal,
@@ -298,11 +300,12 @@ export class AnthropicProvider extends BaseProvider {
     }
 
     const anthropicMessages = this.formatMessagesWithTools(messages);
+    const systemBlocks = this.buildAnthropicSystemBlocks(messages);
 
     const requestBody: Record<string, unknown> = {
       model: this._config.defaultModel,
       max_tokens: this._config.maxTokens || 8192,
-      system: this._config.systemPrompt || undefined,
+      system: systemBlocks.length > 0 ? systemBlocks : undefined,
       messages: anthropicMessages,
     };
 
@@ -416,11 +419,12 @@ export class AnthropicProvider extends BaseProvider {
 
     try {
       const anthropicMessages = this.formatMessagesWithTools(messages);
+      const systemBlocks = this.buildAnthropicSystemBlocks(messages);
 
       const requestBody: Record<string, unknown> = {
         model: this._config.defaultModel,
         max_tokens: this._config.maxTokens || 8192,
-        system: this._config.systemPrompt || undefined,
+        system: systemBlocks.length > 0 ? systemBlocks : undefined,
         messages: anthropicMessages,
         stream: true,
       };

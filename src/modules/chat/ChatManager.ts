@@ -129,6 +129,10 @@ import {
   type SelectedSearchScope,
 } from "./agent-runtime/SearchScopeGate";
 import {
+  buildCacheCheckpointMessage,
+  buildRuntimeContextMessage,
+} from "./prompt-cache-messages";
+import {
   MAX_SCOPE_ITEMS,
   resolveScopedPapers,
   type SessionScope,
@@ -844,19 +848,8 @@ export class ChatManager {
           timestamp: Date.now(),
         },
         ...messagesForApi,
-        {
-          id: "cache-checkpoint",
-          role: "system",
-          content:
-            "Prompt cache checkpoint. This is not user content or an instruction.",
-          timestamp: Date.now(),
-        },
-        {
-          id: "runtime-context",
-          role: "system",
-          content: runtimeContextPrompt,
-          timestamp: Date.now(),
-        },
+        buildCacheCheckpointMessage(),
+        buildRuntimeContextMessage(runtimeContextPrompt),
       ]);
     }
 
@@ -2399,6 +2392,7 @@ export class ChatManager {
         : allowedTools;
     };
     const tools = buildToolsForCurrentSearchScope(_provider);
+    const turnStartTools = tools.map((tool) => ({ ...tool }));
     const getStableSearchToolMode = (): SearchToolPromptMode =>
       searchScopeGateEnabled ? "gated" : getSearchToolPromptMode(tools);
     const includeFullChatContext = !noteSummaryContext;
@@ -2483,19 +2477,8 @@ export class ChatManager {
         timestamp: Date.now(),
       },
       ...messagesForApi,
-      {
-        id: "cache-checkpoint",
-        role: "system",
-        content:
-          "Prompt cache checkpoint. This is not user content or an instruction.",
-        timestamp: Date.now(),
-      },
-      {
-        id: "runtime-context",
-        role: "system",
-        content: runtimeContextPrompt,
-        timestamp: Date.now(),
-      },
+      buildCacheCheckpointMessage(),
+      buildRuntimeContextMessage(runtimeContextPrompt),
     ];
 
     // Tool calling retries each failed model request in place so completed tool
@@ -2530,20 +2513,9 @@ export class ChatManager {
         ),
         forceFinalAnswer: false,
       };
-      const refreshSearchToolsForCurrentModel = (
-        refreshStablePrompt: boolean = true,
-      ) => {
+      const refreshSearchToolsForCurrentModel = () => {
         const nextTools = buildToolsForCurrentSearchScope(currentProvider);
         tools.splice(0, tools.length, ...nextTools);
-        if (refreshStablePrompt) {
-          paperContextPrompt = this.buildToolCallingStableSystemPrompt({
-            paperStructure,
-            hasCurrentItem: hasPromptPaperContext,
-            item: hasPromptPaperContext ? item : undefined,
-            searchToolMode: getStableSearchToolMode(),
-            presentationToolMode: getPresentationToolPromptMode(tools),
-          });
-        }
       };
       const syncModelSpecificRequestContext = () => {
         const isDeepSeek = isDeepSeekToolPromptCacheTarget(currentProvider);
@@ -2553,7 +2525,7 @@ export class ChatManager {
         );
         if (paperContextMessage) {
           paperContextMessage.content = useStableDeepSeekCatalog
-            ? `${paperContextPrompt}\n\n${buildStableToolCatalogForPromptCache(tools)}`
+            ? `${paperContextPrompt}\n\n${buildStableToolCatalogForPromptCache(turnStartTools)}`
             : paperContextPrompt;
         }
         for (
@@ -2570,46 +2542,28 @@ export class ChatManager {
         }
         if (!useStableDeepSeekCatalog) {
           attemptMessagesWithContext.push(
-            {
-              id: "cache-checkpoint",
-              role: "system",
-              content:
-                "Prompt cache checkpoint. This is not user content or an instruction.",
-              timestamp: Date.now(),
-            },
-            {
-              id: "runtime-context",
-              role: "system",
-              content: buildRuntimeSystemPrompt(
+            buildCacheCheckpointMessage(),
+            buildRuntimeContextMessage(
+              buildRuntimeSystemPrompt(
                 attemptMessagesWithContext,
                 sendingSession,
                 latestRuntimeState,
               ),
-              timestamp: Date.now(),
-            },
+            ),
           );
         } else if (noteSummaryContext) {
           // DeepSeek keeps the large tool catalog in the stable prefix, but a
           // note-summary action still needs its changing destination and
           // noteCreated state on every model round.
           attemptMessagesWithContext.push(
-            {
-              id: "cache-checkpoint",
-              role: "system",
-              content:
-                "Prompt cache checkpoint. This is not user content or an instruction.",
-              timestamp: Date.now(),
-            },
-            {
-              id: "runtime-context",
-              role: "system",
-              content: buildRuntimeSystemPrompt(
+            buildCacheCheckpointMessage(),
+            buildRuntimeContextMessage(
+              buildRuntimeSystemPrompt(
                 attemptMessagesWithContext,
                 sendingSession,
                 latestRuntimeState,
               ),
-              timestamp: Date.now(),
-            },
+            ),
           );
         }
       };

@@ -268,23 +268,22 @@ describe("OpenAI-compatible extra request body", function () {
     );
   });
 
-  it("marks only PaperChat cache checkpoints with cache_control", function () {
+  it("marks paper-context with cache_control and omits cache checkpoints", function () {
     const messages: ChatMessage[] = [
+      {
+        id: "paper-context",
+        role: "system",
+        content: "Large stable paper context",
+        timestamp: 1,
+      },
       {
         id: "user-1",
         role: "user",
         content: "hello",
-        timestamp: 1,
-      },
-      {
-        id: "cache-checkpoint",
-        role: "system",
-        content:
-          "Prompt cache checkpoint. This is not user content or an instruction.",
         timestamp: 2,
       },
       {
-        id: "cache-checkpoint-history",
+        id: "cache-checkpoint",
         role: "system",
         content:
           "Prompt cache checkpoint. This is not user content or an instruction.",
@@ -292,20 +291,17 @@ describe("OpenAI-compatible extra request body", function () {
       },
     ];
 
-    const paperchatMessages = provider("paperchat").formatForTest(messages);
-    const customMessages = provider("custom-provider").formatForTest(messages);
-
-    const expectedCheckpointContent = [
+    const formatted = provider("custom-provider").formatForTest(messages);
+    const expectedPaperContextContent = [
       {
         type: "text",
-        text: "Prompt cache checkpoint. This is not user content or an instruction.",
+        text: "Large stable paper context",
         cache_control: { type: "ephemeral" },
       },
     ];
 
-    assert.deepEqual(paperchatMessages[1]?.content, expectedCheckpointContent);
-    assert.deepEqual(paperchatMessages[2]?.content, expectedCheckpointContent);
-    assert.equal(customMessages[1]?.content, messages[1].content);
-    assert.equal(customMessages[2]?.content, messages[2].content);
+    assert.deepEqual(formatted[0]?.content, expectedPaperContextContent);
+    assert.equal(formatted.length, 2);
+    assert.equal(formatted[1]?.role, "user");
   });
 });

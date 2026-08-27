@@ -28,6 +28,10 @@ import { HttpResponseError } from "./HttpResponseError";
 import { sanitizeOpenAIToolCallMessages } from "./openai-tool-call-messages";
 import { getErrorMessage } from "../../utils/common";
 import { extractReasoningTokensFromUsage } from "../../utils/apiUsage";
+import {
+  isCacheCheckpointMessage,
+  isPaperContextMessage,
+} from "../chat/prompt-cache-messages";
 
 export abstract class BaseProvider implements AIProvider {
   protected _config: ApiKeyProviderConfig;
@@ -216,13 +220,33 @@ export abstract class BaseProvider implements AIProvider {
   }
 
   protected shouldMarkPromptCacheCheckpoint(): boolean {
-    return false;
+    return true;
   }
 
-  private isPromptCacheCheckpointMessage(msg: ChatMessage): boolean {
-    return (
-      msg.id === "cache-checkpoint" || msg.id === "cache-checkpoint-history"
-    );
+  protected buildAnthropicSystemBlocks(
+    messages: ChatMessage[],
+  ): AnthropicTextBlock[] {
+    const blocks: AnthropicTextBlock[] = [];
+    const configPrompt = this._config.systemPrompt?.trim();
+    if (configPrompt) {
+      blocks.push({ type: "text", text: configPrompt });
+    }
+
+    for (const msg of this.filterMessages(messages)) {
+      if (msg.role !== "system" || isCacheCheckpointMessage(msg)) {
+        continue;
+      }
+      blocks.push({
+        type: "text",
+        text: msg.content,
+        ...(isPaperContextMessage(msg) &&
+          this.shouldMarkPromptCacheCheckpoint() && {
+            cache_control: { type: "ephemeral" as const },
+          }),
+      });
+    }
+
+    return blocks;
   }
 
   /**
@@ -235,7 +259,7 @@ export abstract class BaseProvider implements AIProvider {
   ): OpenAIMessage[] {
     const filtered = sanitizeOpenAIToolCallMessages(
       this.filterMessages(messages),
-    );
+    ).filter((msg) => !isCacheCheckpointMessage(msg));
     const firstUserIndex = filtered.findIndex((m) => m.role === "user");
 
     return filtered.map((msg, index) => {
@@ -268,12 +292,11 @@ export abstract class BaseProvider implements AIProvider {
       const shouldAttachPdf =
         pdfAttachment && msg.role === "user" && index === firstUserIndex;
       const hasImages = msg.images && msg.images.length > 0;
-      const shouldMarkCacheCheckpoint =
-        this.shouldMarkPromptCacheCheckpoint() &&
-        this.isPromptCacheCheckpointMessage(msg);
+      const shouldMarkPaperContextCache =
+        this.shouldMarkPromptCacheCheckpoint() && isPaperContextMessage(msg);
 
       // Use multimodal format if has images or PDF
-      if (hasImages || shouldAttachPdf || shouldMarkCacheCheckpoint) {
+      if (hasImages || shouldAttachPdf || shouldMarkPaperContextCache) {
         const content: OpenAIMessageContent[] = [];
 
         // Add PDF as document (Anthropic format, supported by new-api)
@@ -292,7 +315,7 @@ export abstract class BaseProvider implements AIProvider {
         content.push({
           type: "text",
           text: msg.content,
-          ...(shouldMarkCacheCheckpoint && {
+          ...(shouldMarkPaperContextCache && {
             cache_control: { type: "ephemeral" as const },
           }),
         });
@@ -314,6 +337,19 @@ export abstract class BaseProvider implements AIProvider {
         }
 
         return { role: msg.role as "user" | "assistant" | "system", content };
+      }
+
+      if (shouldMarkPaperContextCache) {
+        return {
+          role: msg.role as "user" | "assistant" | "system",
+          content: [
+            {
+              type: "text",
+              text: msg.content,
+              cache_control: { type: "ephemeral" as const },
+            },
+          ],
+        };
       }
 
       // Plain text message
