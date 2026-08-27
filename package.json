@@ -11,13 +11,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xutaoya/paper-chat-for-zotero.git"
+    "url": "git+https://github.com/xutaoya/paper-mind.git"
   },
   "author": "xutaoya",
   "bugs": {
-    "url": "https://github.com/xutaoya/paper-chat-for-zotero/issues"
+    "url": "https://github.com/xutaoya/paper-mind/issues"
   },
-  "homepage": "https://github.com/xutaoya/paper-chat-for-zotero#readme",
+  "homepage": "https://github.com/xutaoya/paper-mind#readme",
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "zotero-plugin serve",
