@@ -1,4 +1,4 @@
-paperchat-prefs-title = 论文智读
+paperchat-prefs-title = PaperMind
 
 paperchat-prefs-mineru-title = MinerU
 

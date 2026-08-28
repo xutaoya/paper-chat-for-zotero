@@ -84,6 +84,8 @@ pref-model-exists = Model already exists
 
 pref-pdf-settings = PDF Settings
 
+pref-pdf-parsing-settings = PDF & Parsing
+
 pref-upload-raw-pdf = Upload raw PDF on text extraction failure
 
 pref-upload-raw-pdf-desc = When enabled, uploads original PDF to AI if text extraction fails. This may consume significantly more tokens.
@@ -98,9 +100,9 @@ pref-mineru-test-running = Testing MinerU token…
 
 pref-mineru-pane-title = MinerU Parsing
 
-pref-mineru-pane-desc = Configure the MinerU online API and manage the local parse cache.
+pref-mineru-pane-desc = Use the MinerU online API when local PDF text extraction fails. Expand the section below to manage the parse cache.
 
-pref-mineru-cache-title = Manage Files
+pref-mineru-cache-title = Manage MinerU Cache
 
 pref-mineru-cache-library-root = My Library
 
@@ -163,8 +165,6 @@ pref-mineru-cache-start-none = No PDFs need pre-parsing
 pref-mineru-cache-start-progress = Parsing { $current } / { $total }: { $title }
 
 pref-mineru-cache-start-done = Pre-parse finished: { $success } succeeded, { $failed } failed
-
-pref-mineru-open-settings-hint = MinerU token, connection test, and cache management are now in the separate MinerU settings page.
 
 pref-ai-tools-settings = AI Tools Settings
 

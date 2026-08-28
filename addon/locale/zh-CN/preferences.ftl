@@ -84,6 +84,8 @@ pref-model-exists = 该模型已存在
 
 pref-pdf-settings = PDF 设置
 
+pref-pdf-parsing-settings = PDF 与解析
+
 pref-upload-raw-pdf = 文本提取失败时上传原始 PDF
 
 pref-upload-raw-pdf-desc = 启用后，若文本提取失败将上传原始 PDF 给 AI，这可能会消耗大量 token。
@@ -98,9 +100,9 @@ pref-mineru-test-running = 正在测试 MinerU Token…
 
 pref-mineru-pane-title = MinerU 解析
 
-pref-mineru-pane-desc = 配置 MinerU 在线 API，并管理本地解析缓存。
+pref-mineru-pane-desc = 在本地 PDF 文本提取失败时，可改用 MinerU 在线 API 解析；下方可展开管理解析缓存。
 
-pref-mineru-cache-title = 管理文件
+pref-mineru-cache-title = 管理 MinerU 缓存
 
 pref-mineru-cache-library-root = 我的文献库
 
@@ -163,8 +165,6 @@ pref-mineru-cache-start-none = 没有需要预解析的 PDF
 pref-mineru-cache-start-progress = 正在解析 { $current } / { $total }：{ $title }
 
 pref-mineru-cache-start-done = 预解析完成：成功 { $success }，失败 { $failed }
-
-pref-mineru-open-settings-hint = MinerU Token、测试连接与缓存管理已移至 Zotero 设置中的「MinerU」页面。
 
 pref-ai-tools-settings = AI 工具设置
 

@@ -345,10 +345,36 @@
 }
 
 /* Table */
-.md-table {
+.md-table-scroll {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 10px 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.28) transparent;
+}
+
+.md-table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.md-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 999px;
+}
+
+.md-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.md-table {
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
-  margin: 8px 0;
+  margin: 0;
   font-size: 12px;
 }
 
@@ -672,6 +698,14 @@
 
   .md-table th {
     background: #333;
+  }
+
+  .md-table-scroll {
+    scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  }
+
+  .md-table-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.24);
   }
 
   .md-table tr:nth-child(even) {

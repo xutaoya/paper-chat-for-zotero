@@ -1,5 +1,9 @@
 <linkset>
   <html:link rel="localization" href="__addonRef__-preferences.ftl" />
+  <html:link
+    rel="stylesheet"
+    href="chrome://__addonRef__/content/mineru-preferences.css"
+  />
 </linkset>
 <groupbox
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
@@ -250,9 +254,9 @@
     </hbox>
   </groupbox>
 
-  <!-- PDF Settings -->
-  <groupbox style="margin-top: 16px">
-    <label><html:h3 data-l10n-id="pref-pdf-settings"></html:h3></label>
+  <!-- PDF & MinerU Settings -->
+  <groupbox id="pref-pdf-parsing-panel" style="margin-top: 16px">
+    <label><html:h3 data-l10n-id="pref-pdf-parsing-settings"></html:h3></label>
     <hbox align="center">
       <label
         data-l10n-id="pref-upload-raw-pdf"
@@ -264,10 +268,160 @@
       data-l10n-id="pref-upload-raw-pdf-desc"
       style="font-size: 11px; color: #666; margin-top: 4px; margin-left: 2px"
     ></label>
-    <label
-      data-l10n-id="pref-mineru-open-settings-hint"
-      style="display: block; font-size: 11px; color: #666; margin-top: 10px"
-    ></label>
+
+    <separator class="thin" style="margin: 14px 0" />
+
+    <html:div id="pref-mineru-cache-panel" class="mineru-pref-page mineru-pref-page--embedded">
+      <html:section class="mineru-pref-config">
+        <html:h4
+          class="mineru-pref-config-title"
+          data-l10n-id="pref-mineru-pane-title"
+        ></html:h4>
+        <html:p
+          class="mineru-pref-config-desc"
+          data-l10n-id="pref-mineru-pane-desc"
+        ></html:p>
+
+        <html:div class="mineru-pref-config-row">
+          <label data-l10n-id="pref-use-mineru-on-failure"></label>
+          <checkbox id="pref-mineru-enable-checkbox" native="true" />
+        </html:div>
+
+        <html:div class="mineru-pref-config-row">
+          <label
+            class="mineru-pref-config-label"
+            for="pref-mineru-api-token"
+            data-l10n-id="pref-mineru-api-token"
+          ></label>
+          <html:input
+            type="password"
+            id="pref-mineru-api-token"
+            class="mineru-pref-token-input"
+            autocomplete="off"
+          ></html:input>
+          <html:button
+            id="pref-mineru-test-btn"
+            class="mineru-pref-btn mineru-pref-btn-secondary"
+            data-l10n-id="pref-mineru-test"
+          ></html:button>
+        </html:div>
+        <label
+          id="pref-mineru-test-result"
+          class="mineru-pref-test-result"
+          hidden="true"
+        ></label>
+      </html:section>
+
+      <html:details class="mineru-pref-cache-details">
+        <html:summary
+          class="mineru-pref-cache-details-summary"
+          data-l10n-id="pref-mineru-cache-title"
+        ></html:summary>
+
+        <html:section class="mineru-pref-cache">
+          <html:div class="mineru-pref-cache-header">
+            <html:div class="mineru-pref-progress-wrap">
+              <progress
+                id="pref-mineru-cache-progress"
+                mode="determined"
+                value="0"
+                max="100"
+              ></progress>
+            </html:div>
+            <label
+              id="pref-mineru-cache-summary"
+              class="mineru-pref-summary"
+            ></label>
+          </html:div>
+
+          <html:div class="mineru-pref-toolbar">
+            <html:button
+              id="pref-mineru-cache-start-all"
+              class="mineru-pref-btn mineru-pref-btn-primary"
+              data-l10n-id="pref-mineru-cache-start-all"
+            ></html:button>
+            <html:button
+              id="pref-mineru-cache-start-selected"
+              class="mineru-pref-btn mineru-pref-btn-secondary"
+              data-l10n-id="pref-mineru-cache-start-selected"
+            ></html:button>
+            <html:button
+              id="pref-mineru-cache-repair"
+              class="mineru-pref-btn mineru-pref-btn-secondary"
+              data-l10n-id="pref-mineru-cache-repair"
+            ></html:button>
+            <html:button
+              id="pref-mineru-cache-delete-all"
+              class="mineru-pref-btn mineru-pref-btn-danger"
+              data-l10n-id="pref-mineru-cache-delete-all"
+            ></html:button>
+            <html:button
+              id="pref-mineru-cache-refresh"
+              class="mineru-pref-btn mineru-pref-btn-ghost"
+              data-l10n-id="pref-mineru-cache-refresh"
+            ></html:button>
+          </html:div>
+
+          <label
+            id="pref-mineru-cache-status"
+            class="mineru-pref-status-line"
+            hidden="true"
+          ></label>
+
+          <html:div id="pref-mineru-cache-layout" class="mineru-pref-layout">
+            <html:aside class="mineru-pref-sidebar">
+              <html:div class="mineru-pref-sidebar-body">
+                <html:div
+                  id="pref-mineru-cache-collections"
+                  class="mineru-pref-tree"
+                ></html:div>
+                <html:div class="mineru-pref-tags-section">
+                  <html:div class="mineru-pref-tags-header">
+                    <html:span
+                      class="mineru-pref-sidebar-title"
+                      data-l10n-id="pref-mineru-cache-tags-title"
+                    ></html:span>
+                    <html:span
+                      id="pref-mineru-cache-tags-total"
+                      class="mineru-pref-tags-total"
+                    ></html:span>
+                  </html:div>
+                  <html:div
+                    id="pref-mineru-cache-tags-summary"
+                    class="mineru-pref-tags-summary"
+                  ></html:div>
+                  <html:div
+                    id="pref-mineru-cache-tags"
+                    class="mineru-pref-tags"
+                  ></html:div>
+                </html:div>
+              </html:div>
+              <html:div class="mineru-pref-tag-filter-wrap">
+                <html:input
+                  id="pref-mineru-cache-tag-filter"
+                  type="search"
+                  class="mineru-pref-tag-filter"
+                  data-l10n-id="pref-mineru-cache-tag-filter"
+                  data-l10n-attrs="placeholder"
+                ></html:input>
+              </html:div>
+            </html:aside>
+            <html:main class="mineru-pref-main">
+              <html:div id="pref-mineru-cache-list" class="mineru-pref-list"></html:div>
+              <html:div class="mineru-pref-search-wrap">
+                <html:input
+                  id="pref-mineru-cache-search"
+                  type="search"
+                  class="mineru-pref-search"
+                  data-l10n-id="pref-mineru-cache-search"
+                  data-l10n-attrs="placeholder"
+                ></html:input>
+              </html:div>
+            </html:main>
+          </html:div>
+        </html:section>
+      </html:details>
+    </html:div>
   </groupbox>
 
   <!-- AI Tools Settings -->

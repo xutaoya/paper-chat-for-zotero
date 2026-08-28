@@ -558,3 +558,29 @@
   outline: 2px solid rgba(10, 132, 255, 0.25);
   border-color: var(--mineru-primary);
 }
+
+.mineru-pref-page--embedded {
+  padding: 0;
+  gap: 12px;
+}
+
+.mineru-pref-page--embedded .mineru-pref-config {
+  padding: 12px 14px;
+}
+
+.mineru-pref-cache-details {
+  margin-top: 4px;
+}
+
+.mineru-pref-cache-details-summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mineru-text);
+  margin: 4px 0 10px;
+}
+
+.mineru-pref-page--embedded .mineru-pref-layout {
+  min-height: 280px;
+  max-height: 360px;
+}

@@ -2163,12 +2163,26 @@ export function buildDOMFromTokens(
       }
 
       case "table_open": {
+        const wrapper = doc.createElementNS(HTML_NS, "div") as HTMLElement;
+        wrapper.setAttribute("class", "md-table-scroll");
+        Object.assign(wrapper.style, {
+          display: "block",
+          width: "100%",
+          maxWidth: "100%",
+          overflowX: "auto",
+          overflowY: "hidden",
+          margin: "10px 0",
+          WebkitOverflowScrolling: "touch",
+        });
+
         const table = doc.createElementNS(HTML_NS, "table") as HTMLElement;
+        table.setAttribute("class", "md-table");
         table.style.borderCollapse = "collapse";
-        table.style.width = "100%";
-        table.style.margin = "10px 0";
+        table.style.width = "max-content";
+        table.style.minWidth = "100%";
         table.style.fontSize = "12px";
-        parent.appendChild(table);
+        wrapper.appendChild(table);
+        parent.appendChild(wrapper);
         stack.push(table);
         break;
       }
@@ -2214,6 +2228,8 @@ export function buildDOMFromTokens(
         th.style.background = darkTh ? "#2d2d2d" : chatColors.tableBg;
         th.style.fontWeight = "bold";
         th.style.textAlign = "left";
+        th.style.verticalAlign = "top";
+        th.style.whiteSpace = "nowrap";
         parent.appendChild(th);
         stack.push(th);
         break;
@@ -2227,6 +2243,8 @@ export function buildDOMFromTokens(
         const darkTd = isDarkMode();
         td.style.border = `1px solid ${darkTd ? "#444" : chatColors.tableBorder}`;
         td.style.padding = "8px";
+        td.style.verticalAlign = "top";
+        td.style.minWidth = "120px";
         parent.appendChild(td);
         stack.push(td);
         break;

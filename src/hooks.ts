@@ -3,7 +3,6 @@ import {
   registerPrefsScripts,
   togglePaperChatNoticeUI,
 } from "./modules/preferences";
-import { registerMineruPrefsScripts } from "./modules/preferences/MinerUSettingsUI";
 import { createZToolkit } from "./utils/ztoolkit";
 import {
   registerToolbarButton,
@@ -68,14 +67,6 @@ async function onStartup() {
     id: "paperchat-prefpane",
     src: rootURI + "content/preferences.xhtml",
     label: getString("prefs-title"),
-    image: `chrome://${addon.data.config.addonRef}/content/icons/favicon.svg`,
-  });
-
-  Zotero.PreferencePanes.register({
-    pluginID: addon.data.config.addonID,
-    id: "paperchat-mineru-prefpane",
-    src: rootURI + "content/mineru-preferences.xhtml",
-    label: getString("prefs-mineru-title"),
     image: `chrome://${addon.data.config.addonRef}/content/icons/favicon.svg`,
   });
 
@@ -243,9 +234,6 @@ async function onPrefsEvent(type: string, data: { [key: string]: unknown }) {
   switch (type) {
     case "load":
       registerPrefsScripts(data.window as Window);
-      break;
-    case "mineru-load":
-      await registerMineruPrefsScripts(data.window as Window);
       break;
     case "paperchat-notice-toggle":
       togglePaperChatNoticeUI(data.window as Window);

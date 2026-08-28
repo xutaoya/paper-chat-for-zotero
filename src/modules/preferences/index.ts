@@ -7,6 +7,7 @@ import {
   bindPrefEvents,
   refreshPrefsUI as refreshPrefsUIState,
 } from "./PreferencesManager";
+import { registerMineruPrefsScripts } from "./MinerUSettingsUI";
 import type { PrefsRefreshOptions } from "./types";
 
 export async function registerPrefsScripts(_window: Window): Promise<void> {
@@ -32,6 +33,11 @@ export async function registerPrefsScripts(_window: Window): Promise<void> {
     bindPrefEvents();
   } catch (error) {
     ztoolkit.log("[Preferences] Failed to bind prefs events:", error);
+  }
+  try {
+    await registerMineruPrefsScripts(_window);
+  } catch (error) {
+    ztoolkit.log("[Preferences] Failed to initialize MinerU prefs:", error);
   }
 }
 
