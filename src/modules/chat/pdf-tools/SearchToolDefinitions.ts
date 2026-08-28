@@ -34,7 +34,7 @@ function createGeneralWebSearchDefinition(): ToolDefinition {
             type: "string",
             enum: [...MODEL_VISIBLE_WEB_SEARCH_SOURCES],
             description:
-              "Preferred local source selector. auto uses PaperChat's fallback routing; google_scholar and openalex target scholarly discovery, while bing and duckduckgo target general web pages. Hosted-search models use the vendor's routing instead.",
+              "Preferred local source selector. Prefer openalex for scholarly discovery; use bing or duckduckgo for general web pages. auto routes OpenAlex before Scholar and general web providers. Avoid google_scholar unless OpenAlex is insufficient, because Scholar is frequently blocked. Hosted-search models use the vendor's routing instead.",
           },
           intent: {
             type: "string",
@@ -101,7 +101,7 @@ function createScholarlySearchDefinition(): ToolDefinition {
     function: {
       name: SCHOLARLY_SEARCH_TOOL_NAME,
       description:
-        "Search scholarly sources outside Zotero using PaperChat's local Google Scholar and OpenAlex providers. Use this first for papers, authors, DOI, citation relationships, related work, literature discovery, publication-year filters, or open-access evidence. It never falls back to ordinary web providers. If it is unavailable or returns no useful results, use web_search only when general web evidence is acceptable.",
+        "Search scholarly sources outside Zotero using PaperChat's local OpenAlex and Google Scholar providers. Use this first for papers, authors, DOI, citation relationships, related work, literature discovery, publication-year filters, or open-access evidence. Prefer source=openalex because it is API-backed and more reliable than Scholar scraping. It never falls back to ordinary web providers. If it is unavailable or returns no useful results, use web_search only when general web evidence is acceptable.",
       parameters: {
         type: "object",
         properties: {
@@ -114,7 +114,7 @@ function createScholarlySearchDefinition(): ToolDefinition {
             type: "string",
             enum: [...SCHOLARLY_SEARCH_SOURCES],
             description:
-              "Scholarly source selector. auto routes between Google Scholar and OpenAlex; google_scholar favors broad paper and citation-oriented lookup; openalex favors structured discovery, author, institution, and open-access metadata.",
+              "Scholarly source selector. Prefer openalex for API-backed discovery and metadata. auto routes OpenAlex first, then Google Scholar. google_scholar is a browser fallback and may be blocked by anti-bot checks.",
           },
           intent: {
             type: "string",

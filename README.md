@@ -12,6 +12,8 @@
 
 **PaperMind**（论文智读）是基于 [syt2/paper-chat-for-zotero](https://github.com/syt2/paper-chat-for-zotero) 的个人二创 fork。它将大语言模型直接集成进 [Zotero](https://www.zotero.org/) PDF 阅读器——不用把论文上传到网页，在阅读器侧边栏就能提问、总结、框选图表讨论。插件 ID 与上游不同，可与原版并存安装。
 
+已上架 [Zotero 中文社区](https://zotero-chinese.com) [插件商店](https://zotero-chinese.com/plugins/)，可从国内镜像下载安装。
+
 <p align="center">
   <img src="doc/screenshots/split-view.png" alt="阅读器分屏：左侧 PDF，右侧 AI 对话" width="1024" />
 </p>
@@ -43,15 +45,16 @@
 
 ## 安装
 
-### 下载 `.xpi`
+### 方式一：Zotero 中文社区（推荐）
 
-从 [Releases](https://github.com/xutaoya/paper-mind/releases) 下载最新 `.xpi`。
+1. 打开 [Zotero 中文社区插件商店](https://zotero-chinese.com/plugins/)
+2. 搜索 **PaperMind**（论文智读），下载 `.xpi`
+3. Zotero → `工具` → `附加组件` → ⚙️ → **从文件安装附加组件** → 选择 `.xpi`
+4. 重启 Zotero
 
-### 安装插件
+### 方式二：GitHub Releases
 
-Zotero → `工具` → `附加组件` → ⚙️ → **从文件安装附加组件** → 选择 `.xpi` 文件。
-
-### 重启 Zotero
+从 [Releases](https://github.com/xutaoya/paper-mind/releases) 下载最新 `.xpi`，按上述步骤 3–4 安装。
 
 重启后插件会在启动时自动检查更新（生产构建）。
 
@@ -132,3 +135,4 @@ npm run release
 
 - 原作者：[syt2/paper-chat-for-zotero](https://github.com/syt2/paper-chat-for-zotero)
 - 插件模板：[zotero-plugin-template](https://github.com/windingwind/zotero-plugin-template)
+- 分发渠道：[Zotero 中文社区](https://zotero-chinese.com)

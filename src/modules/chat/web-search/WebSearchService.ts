@@ -87,14 +87,35 @@ function normalizeRequest(
   };
 }
 
+function explicitSourceProviderOrder(
+  source: WebSearchSource,
+): WebSearchSource[] {
+  switch (source) {
+    case "google_scholar":
+      return ["google_scholar", "openalex"];
+    case "openalex":
+      return ["openalex", "google_scholar"];
+    case "bing":
+      return ["bing", "duckduckgo"];
+    case "duckduckgo":
+      return ["duckduckgo", "bing"];
+    default:
+      return [source];
+  }
+}
+
 function buildScholarlyProviderOrder(request: WebSearchRequest): {
   providerIds: WebSearchSource[];
   reason: string;
 } {
   if (request.source !== "auto") {
+    const providerIds = explicitSourceProviderOrder(request.source);
     return {
-      providerIds: [request.source],
-      reason: `explicit source=${request.source}`,
+      providerIds,
+      reason:
+        providerIds.length > 1
+          ? `explicit source=${request.source} with scholarly peer fallback`
+          : `explicit source=${request.source}`,
     };
   }
 
@@ -106,8 +127,8 @@ function buildScholarlyProviderOrder(request: WebSearchRequest): {
   }
 
   return {
-    providerIds: ["google_scholar", "openalex"],
-    reason: `intent=${request.intent} uses scholarly-only fallback routing`,
+    providerIds: ["openalex", "google_scholar"],
+    reason: `intent=${request.intent} prefers API scholarly discovery before Scholar fallback`,
   };
 }
 
@@ -116,16 +137,24 @@ function buildProviderOrder(
   configuredProvider: WebSearchSource,
 ): { providerIds: WebSearchSource[]; reason: string } {
   if (request.source !== "auto") {
+    const providerIds = explicitSourceProviderOrder(request.source);
     return {
-      providerIds: [request.source],
-      reason: `explicit source=${request.source}`,
+      providerIds,
+      reason:
+        providerIds.length > 1
+          ? `explicit source=${request.source} with peer fallback`
+          : `explicit source=${request.source}`,
     };
   }
 
   if (configuredProvider !== "auto") {
+    const providerIds = explicitSourceProviderOrder(configuredProvider);
     return {
-      providerIds: [configuredProvider],
-      reason: `settings default=${configuredProvider}`,
+      providerIds,
+      reason:
+        providerIds.length > 1
+          ? `settings default=${configuredProvider} with peer fallback`
+          : `settings default=${configuredProvider}`,
     };
   }
 
@@ -138,29 +167,29 @@ function buildProviderOrder(
 
   if (request.intent === "biomedical") {
     return {
-      providerIds: ["google_scholar", "openalex", "duckduckgo"],
+      providerIds: ["openalex", "google_scholar", "bing", "duckduckgo"],
       reason:
-        "intent=biomedical defaults to broad biomedical scholarly discovery",
+        "intent=biomedical defaults to API scholarly discovery, then browser scholarly scrape, then general web",
     };
   }
 
   if (request.intent === "discover") {
     return {
-      providerIds: ["openalex", "google_scholar", "duckduckgo"],
-      reason: "intent=discover prefers broad literature discovery",
+      providerIds: ["openalex", "google_scholar", "bing", "duckduckgo"],
+      reason: "intent=discover prefers API discovery, then browser scholarly scrape, then general web",
     };
   }
 
   if (request.intent === "related") {
     return {
-      providerIds: ["google_scholar", "openalex", "duckduckgo"],
-      reason: "intent=related prefers citation-oriented sources",
+      providerIds: ["openalex", "google_scholar", "bing", "duckduckgo"],
+      reason: "intent=related prefers API discovery, then browser scholarly scrape, then general web",
     };
   }
 
   return {
-    providerIds: ["google_scholar", "openalex", "duckduckgo"],
-    reason: "auto routing defaults to paper lookup first",
+    providerIds: ["openalex", "google_scholar", "bing", "duckduckgo"],
+    reason: "auto routing prefers API discovery, then browser scholarly scrape, then general web",
   };
 }
 

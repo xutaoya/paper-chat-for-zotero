@@ -4,7 +4,7 @@ import type {
   WebSearchResponse,
   WebSearchResult,
 } from "./WebSearchProvider";
-import { requestHttp } from "./WebSearchHttp";
+import { fetchSearchHtml, requestHttp } from "./WebSearchHttp";
 import {
   buildSeedEnrichedQuery,
   cleanText,
@@ -26,17 +26,12 @@ export class DuckDuckGoProvider implements WebSearchProvider {
 
   async search(request: WebSearchRequest): Promise<WebSearchResponse> {
     const url = `${SEARCH_URL}?q=${encodeURIComponent(buildSeedEnrichedQuery(request))}`;
-    const response = await this.requestHtml(url, this.searchTimeoutMs);
+    const html = await fetchSearchHtml(url, {
+      timeoutMs: this.searchTimeoutMs,
+      validate: (body) => this.assertNotChallenged(body),
+    });
 
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(
-        `DuckDuckGo search failed: ${response.status} ${response.statusText}`,
-      );
-    }
-
-    this.assertNotChallenged(response.body);
-
-    const results = await this.parseResults(response.body, request);
+    const results = await this.parseResults(html, request);
     return {
       providerId: this.id,
       provider: this.displayName,

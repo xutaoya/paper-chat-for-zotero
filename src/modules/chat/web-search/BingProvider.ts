@@ -4,7 +4,7 @@ import type {
   WebSearchResponse,
   WebSearchResult,
 } from "./WebSearchProvider";
-import { requestHttp } from "./WebSearchHttp";
+import { fetchSearchHtml } from "./WebSearchHttp";
 import {
   buildSeedEnrichedQuery,
   cleanText,
@@ -20,21 +20,14 @@ export class BingProvider implements WebSearchProvider {
 
   async search(request: WebSearchRequest): Promise<WebSearchResponse> {
     const url = this.buildUrl(request);
-    const response = await requestHttp(url, {
+    const html = await fetchSearchHtml(url, {
       timeoutMs: this.searchTimeoutMs,
-      accept: "text/html,application/xhtml+xml",
     });
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(
-        `Bing search failed: ${response.status} ${response.statusText}`,
-      );
-    }
 
     return {
       providerId: this.id,
       provider: this.displayName,
-      results: this.parseResults(response.body, request),
+      results: this.parseResults(html, request),
     };
   }
 

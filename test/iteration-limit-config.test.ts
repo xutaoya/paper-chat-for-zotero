@@ -161,4 +161,40 @@ describe("ToolBudgetLimits", function () {
     const state = createToolBudgetState(previousResults);
     assert.equal(state.getFullTextCalls, 1);
   });
+
+  it("does not count failed local web search toward the turn search budget", async function () {
+    const { createToolBudgetState } = await import(
+      "../src/modules/chat/tool-budget/ToolBudgetPolicy.ts"
+    );
+
+    const previousResults: ToolExecutionResult[] = [
+      {
+        toolCall: {
+          id: "tool-web-1",
+          type: "function",
+          function: {
+            name: "web_search",
+            arguments: JSON.stringify({
+              query: "Pan-Mamba channel swap",
+              source: "google_scholar",
+            }),
+          },
+        },
+        args: {
+          query: "Pan-Mamba channel swap",
+          source: "google_scholar",
+        },
+        status: "failed",
+        content: [
+          "Error: Web search failed: google_scholar: Google Scholar search was blocked by anti-bot verification",
+          "Category: execution_failed",
+          "Retryable: yes",
+        ].join("\n"),
+      },
+    ];
+
+    const state = createToolBudgetState(previousResults);
+    assert.equal(state.webSearchCalls, 0);
+    assert.deepEqual(state.webSearchQueries, []);
+  });
 });

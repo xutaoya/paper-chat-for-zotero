@@ -1536,7 +1536,8 @@ function createMessageActions(
   if (
     msg.role === "assistant" &&
     !msg.apiOnly &&
-    msg.streamingState === undefined &&
+    (msg.streamingState === undefined ||
+      msg.streamingState === "interrupted") &&
     onDeleteTurn
   ) {
     actions.appendChild(

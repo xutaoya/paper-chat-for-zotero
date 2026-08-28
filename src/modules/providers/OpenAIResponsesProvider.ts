@@ -18,6 +18,10 @@ import {
   stablePromptCacheStringify,
 } from "./prompt-cache-diagnostics";
 import { applyReasoningRequestOptions } from "./reasoning-request";
+import {
+  modelSupportsHostedWebSearch,
+  shouldUseOpenAIResponsesProvider,
+} from "./openai-responses-routing";
 
 type ResponsesInputItem = Record<string, unknown>;
 type ResponsesOutputItem = Record<string, unknown>;
@@ -1035,6 +1039,13 @@ export class OpenAIResponsesProvider extends OpenAICompatibleProvider {
 
   setRuntimeOptions(options: OpenAIResponsesRuntimeOptions): void {
     this.runtimeOptions = { ...options };
+  }
+
+  supportsHostedWebSearch(): boolean {
+    return (
+      shouldUseOpenAIResponsesProvider(this._config) &&
+      modelSupportsHostedWebSearch(this._config.defaultModel)
+    );
   }
 
   private getConversationState(): ResponsesConversationState | undefined {

@@ -1,3 +1,6 @@
+import { getErrorMessage } from "../../../utils/common";
+import { loadPageWithHiddenBrowser } from "./HiddenBrowserSearch";
+
 export interface HttpResponse {
   status: number;
   statusText: string;
@@ -60,6 +63,56 @@ export function requestHttp(
 
     xhr.send();
   });
+}
+
+export async function fetchSearchHtml(
+  url: string,
+  options: {
+    timeoutMs: number;
+    accept?: string;
+    validate?: (html: string) => void;
+    hiddenBrowserTimeoutMs?: number;
+  },
+): Promise<string> {
+  try {
+    const response = await requestHttp(url, {
+      timeoutMs: options.timeoutMs,
+      method: "GET",
+      accept: options.accept ?? "text/html,application/xhtml+xml",
+    });
+    if (response.status >= 200 && response.status < 300 && response.body) {
+      try {
+        options.validate?.(response.body);
+        return response.body;
+      } catch (error) {
+        const message = getErrorMessage(error);
+        if (/challenge|anomaly|blocked|unusual traffic/i.test(message)) {
+          throw error;
+        }
+        ztoolkit.log(
+          `[WebSearch] XHR page rejected for ${url}: ${message}`,
+        );
+      }
+    }
+  } catch (error) {
+    const message = getErrorMessage(error);
+    if (/challenge|anomaly|blocked|unusual traffic/i.test(message)) {
+      throw error;
+    }
+    ztoolkit.log(
+      `[WebSearch] XHR fetch failed for ${url}: ${message}`,
+    );
+  }
+
+  const pageData = await loadPageWithHiddenBrowser(url, {
+    timeoutMs: options.hiddenBrowserTimeoutMs ?? Math.max(options.timeoutMs, 15000),
+    settleDelayMs: 1200,
+  });
+  if (!pageData.html) {
+    throw new Error(`Web search page returned empty HTML for ${url}`);
+  }
+  options.validate?.(pageData.html);
+  return pageData.html;
 }
 
 export async function requestJson<T>(

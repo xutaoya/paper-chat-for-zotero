@@ -397,6 +397,7 @@ describe("web search", function () {
 
     const result = await executeWebSearch({
       query: "LLM 2024 research",
+      source: "duckduckgo",
       max_results: 2,
       include_content: true,
     });
@@ -501,6 +502,7 @@ describe("web search", function () {
 
   it("routes auto scholarly lookup to Google Scholar", async function () {
     prefStore.set("extensions.zotero.paperchat.webSearchProvider", "auto");
+    queueJsonResponse({ results: [] });
     queueHiddenBrowserPageData({
       title: "Google Scholar",
       bodyText: "Search results page",
@@ -546,11 +548,16 @@ describe("web search", function () {
       FakeHiddenBrowser.requestedUrls[0],
       /^https:\/\/scholar\.google\.com\/scholar\?/,
     );
-    assert.equal(FakeXMLHttpRequest.requestedUrls.length, 0);
+    assert.equal(FakeXMLHttpRequest.requestedUrls.length, 1);
+    assert.match(
+      FakeXMLHttpRequest.requestedUrls[0],
+      /^https:\/\/api\.openalex\.org\/works\?/,
+    );
   });
 
   it("routes biomedical intent to Google Scholar without touching Europe PMC", async function () {
     prefStore.set("extensions.zotero.paperchat.webSearchProvider", "auto");
+    queueJsonResponse({ results: [] });
     queueHiddenBrowserPageData({
       title: "Google Scholar",
       bodyText: "Search results page",
@@ -576,7 +583,43 @@ describe("web search", function () {
     assert.include(result, "Latest Biomedical Discovery Overview");
     assert.include(result, "Routing: auto -> google_scholar");
     assert.equal(FakeHiddenBrowser.requestedUrls.length, 1);
-    assert.equal(FakeXMLHttpRequest.requestedUrls.length, 0);
+    assert.equal(FakeXMLHttpRequest.requestedUrls.length, 1);
+  });
+
+  it("falls back from explicit google_scholar to OpenAlex when Scholar is blocked", async function () {
+    prefStore.set("extensions.zotero.paperchat.webSearchProvider", "auto");
+    queueHiddenBrowserPageData({
+      title: "Google Scholar",
+      bodyText: "Our systems have detected unusual traffic from your computer network.",
+      html: "<html><body>not a robot</body></html>",
+    });
+    queueJsonResponse({
+      results: [
+        {
+          id: "https://openalex.org/W123",
+          display_name: "Pan-Mamba Channel Swap Survey",
+          publication_year: 2025,
+          cited_by_count: 12,
+          authorships: [{ author: { display_name: "Jane Doe" } }],
+          primary_location: {
+            source: { display_name: "Example Journal" },
+            landing_page_url: "https://example.org/pan-mamba",
+          },
+        },
+      ],
+    });
+
+    const result = await executeWebSearch({
+      query: "Pan-Mamba channel swap",
+      source: "google_scholar",
+      intent: "paper",
+    });
+
+    assert.include(result, "via OpenAlex");
+    assert.include(result, "Pan-Mamba Channel Swap Survey");
+    assert.include(result, "attempts: google_scholar -> openalex");
+    assert.equal(FakeHiddenBrowser.requestedUrls.length, 1);
+    assert.equal(FakeXMLHttpRequest.requestedUrls.length, 1);
   });
 
   it("does not fallback when an explicit scholarly source returns no results", async function () {
@@ -615,6 +658,11 @@ describe("web search", function () {
     queueJsonResponse({ results: [] });
     FakeXMLHttpRequest.queue.push({
       mode: "load",
+      responseText: `<ol id="b_results"></ol>`,
+      headers: { "Content-Type": "text/html" },
+    });
+    FakeXMLHttpRequest.queue.push({
+      mode: "load",
       responseText: `
         <div class="result">
           <a class="result__a" href="https://example.com/fallback">Fallback Result</a>
@@ -635,19 +683,19 @@ describe("web search", function () {
     assert.include(result, "Fallback Result");
     assert.include(
       result,
-      "attempts: google_scholar -> openalex -> duckduckgo",
+      "attempts: openalex -> google_scholar -> bing -> duckduckgo",
     );
     assert.equal(FakeHiddenBrowser.requestedUrls.length, 1);
-    assert.match(
-      FakeHiddenBrowser.requestedUrls[0],
-      /^https:\/\/scholar\.google\.com\/scholar\?/,
-    );
     assert.match(
       FakeXMLHttpRequest.requestedUrls[0],
       /^https:\/\/api\.openalex\.org\/works\?/,
     );
-    assert.equal(
+    assert.match(
       FakeXMLHttpRequest.requestedUrls[1],
+      /^https:\/\/www\.bing\.com\/search\?/,
+    );
+    assert.equal(
+      FakeXMLHttpRequest.requestedUrls[2],
       "https://html.duckduckgo.com/html/?q=related%20work%20Attention%20Is%20All%20You%20Need%2010.48550%2FarXiv.1706.03762",
     );
   });
@@ -691,9 +739,17 @@ describe("web search", function () {
     );
   });
 
-  it("respects explicit DuckDuckGo source and reports timeouts as errors", async function () {
+  it("falls back to hidden browser when DuckDuckGo XHR times out", async function () {
     FakeXMLHttpRequest.queue.push({
       mode: "timeout",
+    });
+    queueHiddenBrowserPageData({
+      html: `
+        <div class="result">
+          <a class="result__a" href="https://example.com/fallback">Fallback Result</a>
+          <div class="result__snippet">Recovered after XHR timeout.</div>
+        </div>
+      `,
     });
 
     const result = await executeWebSearch({
@@ -701,8 +757,9 @@ describe("web search", function () {
       source: "duckduckgo",
     });
 
-    assert.include(result, "Error: Web search failed:");
-    assert.include(result, "timed out");
+    assert.include(result, "via DuckDuckGo");
+    assert.include(result, "Fallback Result");
+    assert.equal(FakeHiddenBrowser.requestedUrls.length, 1);
   });
 
   it("falls back from invalid prefs without mutating the stored value", async function () {
@@ -710,6 +767,7 @@ describe("web search", function () {
       "extensions.zotero.paperchat.webSearchProvider",
       "invalid-provider",
     );
+    queueJsonResponse({ results: [] });
     queueHiddenBrowserPageData({
       title: "Google Scholar",
       bodyText: "Search results",
@@ -743,6 +801,7 @@ describe("web search", function () {
       "extensions.zotero.paperchat.webSearchProvider",
       "semantic_scholar",
     );
+    queueJsonResponse({ results: [] });
     queueHiddenBrowserPageData({
       title: "Google Scholar",
       bodyText: "Search results",

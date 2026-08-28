@@ -13,6 +13,8 @@ import type {
   FallbackConfig,
 } from "../../types/provider";
 import { OpenAICompatibleProvider } from "./OpenAICompatibleProvider";
+import { OpenAIResponsesProvider } from "./OpenAIResponsesProvider";
+import { shouldUseOpenAIResponsesProvider } from "./openai-responses-routing";
 import { AnthropicProvider } from "./AnthropicProvider";
 import { GeminiProvider } from "./GeminiProvider";
 import { config } from "../../../package.json";
@@ -402,13 +404,18 @@ export class ProviderManager {
         return new GeminiProvider(config as ApiKeyProviderConfig);
       case "openai":
       case "openai-compatible":
-      case "custom":
-        return new OpenAICompatibleProvider({
+      case "custom": {
+        const apiConfig = {
           ...(config as ApiKeyProviderConfig),
           reasoningEffort: normalizeReasoningEffortPreference(
             getPref("reasoningEffort"),
           ),
-        });
+        };
+        if (shouldUseOpenAIResponsesProvider(apiConfig)) {
+          return new OpenAIResponsesProvider(apiConfig);
+        }
+        return new OpenAICompatibleProvider(apiConfig);
+      }
       default:
         return null;
     }

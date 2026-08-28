@@ -113,6 +113,7 @@ import {
 import { isAbortError, SessionRunInvalidatedError } from "./errors";
 import { ANALYTICS_EVENTS, getAnalyticsService } from "../analytics";
 import { providerSupportsToolCalling } from "../providers/provider-capabilities";
+import { configureOpenAIResponsesProviderForSession } from "../providers/openai-responses-routing";
 import type {
   ChatHistoryMessagePage,
   ChatHistorySearchPage,
@@ -2484,6 +2485,10 @@ export class ChatManager {
     // Tool calling retries each failed model request in place so completed tool
     // results remain in currentMessages and are never executed a second time.
     const currentProvider = _provider as AIProvider & ToolCallingProvider;
+    configureOpenAIResponsesProviderForSession(
+      currentProvider,
+      sendingSession.id,
+    );
 
     try {
       onProviderUsed(currentProvider.config.id);

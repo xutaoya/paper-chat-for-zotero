@@ -93,7 +93,7 @@ export function generatePaperContextPrompt(
         : searchToolMode === "split"
           ? "- search_scholarly_sources: Search Google Scholar and OpenAlex locally for papers, authors, DOI, citations, related work, and literature discovery. Use this first for scholarly questions. It never falls back to ordinary web providers.\n- web_search: Use the model vendor's hosted Web Search for current information, news, official sites, real-time facts, and general webpages. Use it after scholarly search only when ordinary web evidence is acceptable.\n"
           : searchToolMode === "unified"
-            ? "- web_search: Search external scholarly sources or the public web outside Zotero. Prefer specifying source explicitly: google_scholar for broad scholarly lookup, openalex for broad discovery and author metadata, bing or duckduckgo for general websites. Use source=auto only when you genuinely want lightweight fallback routing, where duckduckgo is only a final fallback.\n"
+            ? "- web_search: Search external scholarly sources or the public web outside Zotero. Prefer openalex for scholarly discovery and metadata; use bing or duckduckgo for general websites. Avoid google_scholar unless OpenAlex returns no useful results, because Scholar is frequently blocked by anti-bot checks. Use source=auto only when you genuinely want lightweight fallback routing.\n"
             : "";
   const parallelToolCallingGuidance = `=== PARALLEL TOOL CALLING ===
 When you need multiple independent pieces of evidence, request all independent read-only or network lookups in the same tool-calling turn instead of waiting for one result before requesting the next.
