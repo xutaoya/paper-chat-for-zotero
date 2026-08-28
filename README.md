@@ -4,31 +4,40 @@
 [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg?style=flat-square)](https://www.gnu.org/licenses/agpl-3.0)
 [![Latest release](https://img.shields.io/github/v/release/xutaoya/paper-mind?style=flat-square)](https://github.com/xutaoya/paper-mind/releases)
-[![Fork](https://img.shields.io/badge/Fork-paper-chat-for-zotero-grey?style=flat-square)](https://github.com/syt2/paper-chat-for-zotero)
+[![Fork](https://img.shields.io/badge/Fork-paper--chat--for--zotero-grey?style=flat-square)](https://github.com/syt2/paper-chat-for-zotero)
 
 <p align="center">
-  <img src="addon/content/icons/favicon.svg" alt="PaperMind" width="128" />
+  <img src="doc/hero.png" alt="PaperMind — AI 论文对话助手" width="680" />
 </p>
 
 **PaperMind**（论文智读）是基于 [syt2/paper-chat-for-zotero](https://github.com/syt2/paper-chat-for-zotero) 的个人二创 fork。它将大语言模型直接集成进 [Zotero](https://www.zotero.org/) PDF 阅读器——不用把论文上传到网页，在阅读器侧边栏就能提问、总结、框选图表讨论。插件 ID 与上游不同，可与原版并存安装。
 
 已上架 [Zotero 中文社区](https://zotero-chinese.com) [插件商店](https://zotero-chinese.com/plugins/)，可从国内镜像下载安装。
 
-<p align="center">
-  <img src="doc/screenshots/split-view.png" alt="阅读器分屏：左侧 PDF，右侧 AI 对话" width="1024" />
-</p>
+## 截图
 
-<p align="center">
-  <img src="doc/screenshots/chat-panel.png" alt="对话面板与快捷操作" width="1024" />
-</p>
-
-<p align="center">
-  <img src="doc/screenshots/pdf-reader-chat.png" alt="框选图表截图提问" width="1024" />
-</p>
-
-<p align="center">
-  <img src="doc/screenshots/context-window.png" alt="背景信息窗口：查看当前对话 token 占用" width="800" />
-</p>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="doc/screenshots/split-view.png" alt="阅读器分屏对话" width="420" /><br />
+      阅读器分屏对话
+    </td>
+    <td align="center" width="50%">
+      <img src="doc/screenshots/chat-panel.png" alt="对话面板与快捷操作" width="420" /><br />
+      对话面板与快捷操作
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="doc/screenshots/pdf-reader-chat.png" alt="框选图表截图提问" width="420" /><br />
+      框选图表截图提问
+    </td>
+    <td align="center">
+      <img src="doc/screenshots/context-window.png" alt="背景信息窗口" width="420" /><br />
+      背景信息窗口
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -68,15 +77,18 @@
 2. 填写 **API Key** 和 **接口地址**，选择 **模型**
 3. 点击 **测试连接** 验证
 
-<p align="center">
-  <img src="doc/screenshots/provider-settings.png" alt="服务商与模型配置" width="800" />
-</p>
-
-如需解析扫描版或复杂排版 PDF，在 MinerU 页填写 Token，并管理解析缓存：
-
-<p align="center">
-  <img src="doc/screenshots/mineru-settings.png" alt="MinerU PDF 解析配置" width="800" />
-</p>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="doc/screenshots/provider-settings.png" alt="服务商与模型配置" width="400" /><br />
+      服务商配置
+    </td>
+    <td align="center" width="50%">
+      <img src="doc/screenshots/mineru-settings.png" alt="MinerU PDF 解析" width="400" /><br />
+      MinerU 解析
+    </td>
+  </tr>
+</table>
 
 ---
 
