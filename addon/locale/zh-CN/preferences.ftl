@@ -86,6 +86,28 @@ pref-pdf-settings = PDF 设置
 
 pref-pdf-parsing-settings = PDF 与解析
 
+pref-web-search-settings = 网络搜索
+
+pref-use-exa-web-search = 启用 Exa 网络搜索
+
+pref-exa-api-key = Exa API Key
+
+pref-exa-test = 测试连接
+
+pref-exa-test-running = 正在测试 Exa API Key…
+
+pref-exa-pane-title = Exa 搜索
+
+pref-exa-pane-desc = 配置 Exa API 后，本地 web_search 会优先使用 Exa 进行高质量网页检索。
+
+pref-api-apply-link = 点击去申请
+
+pref-ui-settings = 界面
+
+pref-chat-ui-font-scale = 聊天面板缩放
+
+pref-chat-ui-font-scale-desc = 调整阅读器侧边栏与浮动聊天窗口中的文字、表格和控件大小。默认 100%，范围 80%–180%。
+
 pref-upload-raw-pdf = 文本提取失败时上传原始 PDF
 
 pref-upload-raw-pdf-desc = 启用后，若文本提取失败将上传原始 PDF 给 AI，这可能会消耗大量 token。

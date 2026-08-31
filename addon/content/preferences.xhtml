@@ -277,10 +277,18 @@
           class="mineru-pref-config-title"
           data-l10n-id="pref-mineru-pane-title"
         ></html:h4>
-        <html:p
-          class="mineru-pref-config-desc"
-          data-l10n-id="pref-mineru-pane-desc"
-        ></html:p>
+        <html:div class="mineru-pref-config-desc-row">
+          <html:p
+            class="mineru-pref-config-desc"
+            data-l10n-id="pref-mineru-pane-desc"
+          ></html:p>
+          <html:a
+            id="pref-mineru-apply-link"
+            class="mineru-pref-apply-link"
+            href="#"
+            data-l10n-id="pref-api-apply-link"
+          ></html:a>
+        </html:div>
 
         <html:div class="mineru-pref-config-row">
           <label data-l10n-id="pref-use-mineru-on-failure"></label>
@@ -422,6 +430,88 @@
         </html:section>
       </html:details>
     </html:div>
+  </groupbox>
+
+  <!-- Web Search (Exa) -->
+  <groupbox id="pref-web-search-panel" style="margin-top: 16px">
+    <label><html:h3 data-l10n-id="pref-web-search-settings"></html:h3></label>
+    <html:div class="mineru-pref-page mineru-pref-page--embedded">
+      <html:section class="mineru-pref-config">
+        <html:h4
+          class="mineru-pref-config-title"
+          data-l10n-id="pref-exa-pane-title"
+        ></html:h4>
+        <html:div class="mineru-pref-config-desc-row">
+          <html:p
+            class="mineru-pref-config-desc"
+            data-l10n-id="pref-exa-pane-desc"
+          ></html:p>
+          <html:a
+            id="pref-exa-apply-link"
+            class="mineru-pref-apply-link"
+            href="#"
+            data-l10n-id="pref-api-apply-link"
+          ></html:a>
+        </html:div>
+
+        <html:div class="mineru-pref-config-row">
+          <label data-l10n-id="pref-use-exa-web-search"></label>
+          <checkbox id="pref-exa-enable-checkbox" native="true" />
+        </html:div>
+
+        <html:div class="mineru-pref-config-row">
+          <label
+            class="mineru-pref-config-label"
+            for="pref-exa-api-key"
+            data-l10n-id="pref-exa-api-key"
+          ></label>
+          <html:input
+            type="password"
+            id="pref-exa-api-key"
+            class="mineru-pref-token-input"
+            autocomplete="off"
+          ></html:input>
+          <html:button
+            id="pref-exa-test-btn"
+            class="mineru-pref-btn mineru-pref-btn-secondary"
+            data-l10n-id="pref-exa-test"
+          ></html:button>
+        </html:div>
+        <label
+          id="pref-exa-test-result"
+          class="mineru-pref-test-result"
+          hidden="true"
+        ></label>
+      </html:section>
+    </html:div>
+  </groupbox>
+
+  <!-- Chat UI Settings -->
+  <groupbox style="margin-top: 16px">
+    <label><html:h3 data-l10n-id="pref-ui-settings"></html:h3></label>
+    <hbox align="center" style="margin-top: 8px">
+      <label
+        for="pref-chat-ui-font-scale"
+        data-l10n-id="pref-chat-ui-font-scale"
+        style="width: 150px; margin-right: 8px"
+      ></label>
+      <html:input
+        type="range"
+        id="pref-chat-ui-font-scale"
+        style="width: 180px"
+        min="80"
+        max="180"
+        step="10"
+      ></html:input>
+      <label
+        id="pref-chat-ui-font-scale-value"
+        style="margin-left: 8px; min-width: 48px"
+      ></label>
+    </hbox>
+    <label
+      data-l10n-id="pref-chat-ui-font-scale-desc"
+      style="font-size: 11px; color: #666; margin-top: 4px; margin-left: 2px"
+    ></label>
   </groupbox>
 
   <!-- AI Tools Settings -->

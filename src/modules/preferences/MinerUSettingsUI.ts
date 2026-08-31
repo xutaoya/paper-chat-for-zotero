@@ -1,3 +1,7 @@
+import {
+  bindExternalPrefLink,
+  MINERU_TOKEN_APPLY_URL,
+} from "./openExternalPrefLink";
 import { getPref, setPref } from "../../utils/prefs";
 import { getString } from "../../utils/locale";
 import { getErrorMessage } from "../../utils/common";
@@ -527,6 +531,8 @@ export function bindMineruPrefEvents(doc: Document): void {
   }
   (doc as Document & { [MINERU_PREFS_BOUND]?: boolean })[MINERU_PREFS_BOUND] =
     true;
+
+  bindExternalPrefLink(doc, "pref-mineru-apply-link", MINERU_TOKEN_APPLY_URL);
 
   const search = doc.getElementById(
     "pref-mineru-cache-search",

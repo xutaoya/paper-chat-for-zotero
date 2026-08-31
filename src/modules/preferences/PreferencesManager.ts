@@ -25,6 +25,11 @@ import {
 } from "../chat/tool-permissions/ToolPermissionDefaults";
 import { normalizeAgentMaxPlanningIterations } from "../chat/agent-runtime/IterationLimitConfig";
 import {
+  formatChatUIFontScaleLabel,
+  getChatUIFontScale,
+  persistChatUIFontScale,
+} from "../ui/chat-panel/chatUIFontScale";
+import {
   CONTEXT_AUTO_COMPACT_WINDOW_TOKEN_STEPS,
   normalizeContextAutoCompactWindowTokens,
 } from "../chat/ContextManager";
@@ -165,6 +170,7 @@ export async function refreshPrefsUI(
 
   // Initialize AISummary settings
   initAISummarySettings(doc);
+  initChatUIFontScaleControl(doc);
 }
 
 /**
@@ -281,6 +287,7 @@ export function bindPrefEvents(): void {
 
   // Bind AISummary settings events
   bindAISummarySettingsEvents(doc);
+  bindChatUISettingsEvents(doc);
 }
 
 /**
@@ -334,6 +341,49 @@ function bindAIToolsSettingsEvent(doc: Document): void {
   }
 
   bindToolPermissionDefaultsEvents(doc);
+}
+
+function initChatUIFontScaleControl(doc: Document): void {
+  const scaleInput = doc.getElementById(
+    "pref-chat-ui-font-scale",
+  ) as HTMLInputElement | null;
+  if (!scaleInput) {
+    return;
+  }
+
+  const configured = getChatUIFontScale();
+  scaleInput.value = String(configured);
+  updateChatUIFontScaleDisplay(doc);
+}
+
+function updateChatUIFontScaleDisplay(doc: Document): void {
+  const scaleInput = doc.getElementById(
+    "pref-chat-ui-font-scale",
+  ) as HTMLInputElement | null;
+  const valueLabel = doc.getElementById("pref-chat-ui-font-scale-value");
+  if (!scaleInput || !valueLabel) {
+    return;
+  }
+
+  valueLabel.textContent = formatChatUIFontScaleLabel(scaleInput.value);
+}
+
+function bindChatUISettingsEvents(doc: Document): void {
+  const scaleInput = doc.getElementById(
+    "pref-chat-ui-font-scale",
+  ) as HTMLInputElement | null;
+  if (!scaleInput) {
+    return;
+  }
+
+  const persist = () => {
+    const normalized = persistChatUIFontScale(scaleInput.value);
+    scaleInput.value = String(normalized);
+    updateChatUIFontScaleDisplay(doc);
+  };
+
+  scaleInput.addEventListener("input", persist);
+  scaleInput.addEventListener("change", persist);
 }
 
 function initAgentIterationLimitControl(doc: Document): void {

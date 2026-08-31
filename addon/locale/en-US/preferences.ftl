@@ -86,6 +86,28 @@ pref-pdf-settings = PDF Settings
 
 pref-pdf-parsing-settings = PDF & Parsing
 
+pref-web-search-settings = Web Search
+
+pref-use-exa-web-search = Enable Exa web search
+
+pref-exa-api-key = Exa API Key
+
+pref-exa-test = Test Connection
+
+pref-exa-test-running = Testing Exa API key…
+
+pref-exa-pane-title = Exa Search
+
+pref-exa-pane-desc = When configured, local web_search prefers Exa for higher-quality web retrieval.
+
+pref-api-apply-link = Get API Key
+
+pref-ui-settings = Interface
+
+pref-chat-ui-font-scale = Chat panel scale
+
+pref-chat-ui-font-scale-desc = Adjust text, tables, and controls in the sidebar and floating chat window. Default is 100%; range is 80%–180%.
+
 pref-upload-raw-pdf = Upload raw PDF on text extraction failure
 
 pref-upload-raw-pdf-desc = When enabled, uploads original PDF to AI if text extraction fails. This may consume significantly more tokens.

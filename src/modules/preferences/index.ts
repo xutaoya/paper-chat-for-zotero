@@ -8,6 +8,7 @@ import {
   refreshPrefsUI as refreshPrefsUIState,
 } from "./PreferencesManager";
 import { registerMineruPrefsScripts } from "./MinerUSettingsUI";
+import { registerExaPrefsScripts } from "./ExaSettingsUI";
 import type { PrefsRefreshOptions } from "./types";
 
 export async function registerPrefsScripts(_window: Window): Promise<void> {
@@ -38,6 +39,11 @@ export async function registerPrefsScripts(_window: Window): Promise<void> {
     await registerMineruPrefsScripts(_window);
   } catch (error) {
     ztoolkit.log("[Preferences] Failed to initialize MinerU prefs:", error);
+  }
+  try {
+    registerExaPrefsScripts(_window);
+  } catch (error) {
+    ztoolkit.log("[Preferences] Failed to initialize Exa prefs:", error);
   }
 }
 

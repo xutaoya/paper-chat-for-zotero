@@ -12,6 +12,8 @@ pref(
 pref("uploadRawPdfOnFailure", false);
 pref("useMineruOnExtractFailure", false);
 pref("mineruApiToken", "");
+pref("useExaWebSearch", false);
+pref("exaApiKey", "");
 
 pref("reasoningEffort", "default");
 
@@ -19,6 +21,7 @@ pref("reasoningEffort", "default");
 pref("panelMode", "sidebar");
 pref("floatingWindowWidth", 420);
 pref("floatingWindowHeight", 600);
+pref("chatUIFontScale", 100);
 pref("debugContextExportEnabled", false);
 
 // Guide Settings

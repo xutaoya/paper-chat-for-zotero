@@ -1,8 +1,10 @@
 import { assert } from "chai";
+import { config } from "../package.json";
 import {
   executeScholarlySearch,
   executeWebSearch,
 } from "../src/modules/chat/web-search/WebSearchService.ts";
+import { isExaWebSearchEnabled } from "../src/modules/chat/web-search/ExaApi.ts";
 import {
   isValidScholarlySearchArgs,
   isValidWebSearchArgs,
@@ -464,6 +466,66 @@ describe("web search", function () {
       FakeXMLHttpRequest.requestedUrls[0],
       "https://www.bing.com/search?q=Bing%20search%20test",
     );
+  });
+
+  it("routes web intent to Exa before Bing when Exa is enabled", async function () {
+    prefStore.set(`${config.prefsPrefix}.webSearchProvider`, "auto");
+    prefStore.set(`${config.prefsPrefix}.useExaWebSearch`, true);
+    prefStore.set(`${config.prefsPrefix}.exaApiKey`, "test-exa-key");
+    queueJsonResponse({
+      results: [
+        {
+          title: "Exa Web Result",
+          url: "https://example.com/exa-web",
+          highlights: ["High quality web snippet."],
+        },
+      ],
+    });
+
+    const result = await executeWebSearch({
+      query: "general web lookup",
+      intent: "web",
+    });
+
+    assert.include(result, "via Exa");
+    assert.include(result, "Exa Web Result");
+    assert.include(result, "Routing: auto -> exa");
+    assert.equal(FakeXMLHttpRequest.requestedMethods[0], "POST");
+    assert.equal(
+      FakeXMLHttpRequest.requestedUrls[0],
+      "https://api.exa.ai/search",
+    );
+  });
+
+  it("returns parsed Exa results for explicit source=exa", async function () {
+    prefStore.set(`${config.prefsPrefix}.useExaWebSearch`, true);
+    prefStore.set(`${config.prefsPrefix}.exaApiKey`, "test-exa-key");
+    queueJsonResponse({
+      results: [
+        {
+          title: "Exa Research Hit",
+          url: "https://example.org/exa-paper",
+          publishedDate: "2024-06-01T00:00:00.000Z",
+          author: "Jane Doe",
+          highlights: ["A concise Exa highlight."],
+          text: "Full page text for the Exa result.",
+        },
+      ],
+    });
+
+    const result = await executeWebSearch({
+      query: "transformer papers",
+      source: "exa",
+      include_content: true,
+    });
+
+    assert.include(result, "via Exa");
+    assert.include(result, "Exa Research Hit");
+    assert.include(result, "Authors: Jane Doe");
+    assert.include(result, "Year: 2024");
+    assert.include(result, "A concise Exa highlight.");
+    assert.include(result, "Full page text for the Exa result.");
+    assert.equal(FakeXMLHttpRequest.requestedMethods[0], "POST");
   });
 
   it("routes web intent to Bing before falling back to DuckDuckGo", async function () {
@@ -1062,6 +1124,10 @@ describe("web search", function () {
       query: "valid bing source",
       source: "bing",
     });
+    const validExa = isValidWebSearchArgs({
+      query: "valid exa source",
+      source: "exa",
+    });
     const invalidSource = isValidWebSearchArgs({
       query: "invalid source",
       source: "google-scholar",
@@ -1087,6 +1153,7 @@ describe("web search", function () {
     assert.isTrue(validGoogleScholar);
     assert.isTrue(validSemanticScholarWeb);
     assert.isTrue(validBing);
+    assert.isTrue(validExa);
     assert.isFalse(invalidSource);
     assert.isFalse(removedEuropePmc);
     assert.isFalse(invalidDomainFilter);

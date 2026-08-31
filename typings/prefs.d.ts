@@ -15,10 +15,13 @@ declare namespace _ZoteroTypes {
       "uploadRawPdfOnFailure": boolean;
       "useMineruOnExtractFailure": boolean;
       "mineruApiToken": string;
+      "useExaWebSearch": boolean;
+      "exaApiKey": string;
       "reasoningEffort": string;
       "panelMode": string;
       "floatingWindowWidth": number;
       "floatingWindowHeight": number;
+      "chatUIFontScale": number;
       "debugContextExportEnabled": boolean;
       "firstInstalledVersion": string;
       "guideStatus": number;

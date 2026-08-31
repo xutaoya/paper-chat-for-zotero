@@ -14,6 +14,7 @@ import type {
   WebSearchResponse,
   WebSearchResult,
 } from "./WebSearchProvider";
+import { isExaWebSearchEnabled } from "./ExaApi";
 import {
   createWebSearchProvider,
   normalizeWebSearchProviderId,
@@ -95,6 +96,10 @@ function explicitSourceProviderOrder(
       return ["google_scholar", "openalex"];
     case "openalex":
       return ["openalex", "google_scholar"];
+    case "exa":
+      return isExaWebSearchEnabled()
+        ? ["exa", "bing", "duckduckgo"]
+        : ["exa"];
     case "bing":
       return ["bing", "duckduckgo"];
     case "duckduckgo":
@@ -102,6 +107,43 @@ function explicitSourceProviderOrder(
     default:
       return [source];
   }
+}
+
+function applyExaRouting(
+  providerIds: WebSearchSource[],
+  request: WebSearchRequest,
+): WebSearchSource[] {
+  if (!isExaWebSearchEnabled()) {
+    return providerIds.filter((providerId) => providerId !== "exa");
+  }
+
+  if (providerIds.includes("exa")) {
+    return providerIds;
+  }
+
+  if (request.intent === "web") {
+    return ["exa", ...providerIds];
+  }
+
+  const webFallbackIndex = providerIds.findIndex(
+    (providerId) => providerId === "bing" || providerId === "duckduckgo",
+  );
+  if (webFallbackIndex >= 0) {
+    return [
+      ...providerIds.slice(0, webFallbackIndex),
+      "exa",
+      ...providerIds.slice(webFallbackIndex),
+    ];
+  }
+
+  return providerIds;
+}
+
+function finalizeProviderOrder(
+  providerIds: WebSearchSource[],
+  request: WebSearchRequest,
+): WebSearchSource[] {
+  return applyExaRouting(providerIds, request);
 }
 
 function buildScholarlyProviderOrder(request: WebSearchRequest): {
@@ -137,7 +179,10 @@ function buildProviderOrder(
   configuredProvider: WebSearchSource,
 ): { providerIds: WebSearchSource[]; reason: string } {
   if (request.source !== "auto") {
-    const providerIds = explicitSourceProviderOrder(request.source);
+    const providerIds = finalizeProviderOrder(
+      explicitSourceProviderOrder(request.source),
+      request,
+    );
     return {
       providerIds,
       reason:
@@ -148,7 +193,10 @@ function buildProviderOrder(
   }
 
   if (configuredProvider !== "auto") {
-    const providerIds = explicitSourceProviderOrder(configuredProvider);
+    const providerIds = finalizeProviderOrder(
+      explicitSourceProviderOrder(configuredProvider),
+      request,
+    );
     return {
       providerIds,
       reason:
@@ -160,14 +208,17 @@ function buildProviderOrder(
 
   if (request.intent === "web") {
     return {
-      providerIds: ["bing", "duckduckgo"],
+      providerIds: finalizeProviderOrder(["bing", "duckduckgo"], request),
       reason: "intent=web explicitly targets the public web",
     };
   }
 
   if (request.intent === "biomedical") {
     return {
-      providerIds: ["openalex", "google_scholar", "bing", "duckduckgo"],
+      providerIds: finalizeProviderOrder(
+        ["openalex", "google_scholar", "bing", "duckduckgo"],
+        request,
+      ),
       reason:
         "intent=biomedical defaults to API scholarly discovery, then browser scholarly scrape, then general web",
     };
@@ -175,20 +226,29 @@ function buildProviderOrder(
 
   if (request.intent === "discover") {
     return {
-      providerIds: ["openalex", "google_scholar", "bing", "duckduckgo"],
+      providerIds: finalizeProviderOrder(
+        ["openalex", "google_scholar", "bing", "duckduckgo"],
+        request,
+      ),
       reason: "intent=discover prefers API discovery, then browser scholarly scrape, then general web",
     };
   }
 
   if (request.intent === "related") {
     return {
-      providerIds: ["openalex", "google_scholar", "bing", "duckduckgo"],
+      providerIds: finalizeProviderOrder(
+        ["openalex", "google_scholar", "bing", "duckduckgo"],
+        request,
+      ),
       reason: "intent=related prefers API discovery, then browser scholarly scrape, then general web",
     };
   }
 
   return {
-    providerIds: ["openalex", "google_scholar", "bing", "duckduckgo"],
+    providerIds: finalizeProviderOrder(
+      ["openalex", "google_scholar", "bing", "duckduckgo"],
+      request,
+    ),
     reason: "auto routing prefers API discovery, then browser scholarly scrape, then general web",
   };
 }

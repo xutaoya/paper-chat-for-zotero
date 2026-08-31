@@ -1,5 +1,6 @@
 import { BingProvider } from "./BingProvider";
 import { DuckDuckGoProvider } from "./DuckDuckGoProvider";
+import { ExaProvider } from "./ExaProvider";
 import { GoogleScholarProvider } from "./GoogleScholarProvider";
 import { OpenAlexProvider } from "./OpenAlexProvider";
 import { SemanticScholarWebProvider } from "./SemanticScholarWebProvider";
@@ -43,6 +44,7 @@ const CONFIGURABLE_WEB_SEARCH_PROVIDER_IDS = new Set<string>([
 
 const WEB_SEARCH_PROVIDER_IDS = new Set<string>([
   ...CONFIGURABLE_WEB_SEARCH_PROVIDER_IDS,
+  "exa",
   "semantic_scholar",
   "semantic_scholar_web",
 ]);
@@ -85,6 +87,8 @@ export function createWebSearchProvider(
       return new GoogleScholarProvider();
     case "openalex":
       return new OpenAlexProvider();
+    case "exa":
+      return new ExaProvider();
     case "bing":
       return new BingProvider();
     case "duckduckgo":

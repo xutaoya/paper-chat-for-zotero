@@ -34,7 +34,7 @@ function createGeneralWebSearchDefinition(): ToolDefinition {
             type: "string",
             enum: [...MODEL_VISIBLE_WEB_SEARCH_SOURCES],
             description:
-              "Preferred local source selector. Prefer openalex for scholarly discovery; use bing or duckduckgo for general web pages. auto routes OpenAlex before Scholar and general web providers. Avoid google_scholar unless OpenAlex is insufficient, because Scholar is frequently blocked. Hosted-search models use the vendor's routing instead.",
+              "Preferred local source selector. Prefer openalex for scholarly discovery; use exa when configured in PaperMind settings for higher-quality web search; use bing or duckduckgo for general web pages. auto routes OpenAlex before Scholar, then Exa (if enabled), then general web providers. Avoid google_scholar unless OpenAlex is insufficient, because Scholar is frequently blocked. Hosted-search models use the vendor's routing instead.",
           },
           intent: {
             type: "string",

@@ -39,6 +39,25 @@
   line-height: 1.5;
 }
 
+.mineru-pref-config-desc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.mineru-pref-apply-link {
+  font-size: 12px;
+  color: var(--link-color, #1a73e8);
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mineru-pref-apply-link:hover {
+  opacity: 0.85;
+}
+
 .mineru-pref-config-row {
   display: flex;
   align-items: center;

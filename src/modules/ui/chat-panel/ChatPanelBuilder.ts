@@ -10,6 +10,7 @@ import { createContextItemBanner } from "./ContextItemBanner";
 import { createContextWindowUsageIndicator } from "./contextWindowIndicatorDom";
 import type { ThemeColors } from "./types";
 import { HTML_NS } from "./types";
+import { monitorChatPanelRoot } from "./chatUIFontScale";
 
 /**
  * Helper to create an element with styles (using proper HTML namespace for XHTML)
@@ -1320,6 +1321,7 @@ export function createChatContainer(
   root.appendChild(modelDropdown);
   root.appendChild(mentionPopup);
   container.appendChild(root);
+  monitorChatPanelRoot(root);
 
   doc.documentElement?.appendChild(container);
   return container;

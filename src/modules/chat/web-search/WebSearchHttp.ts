@@ -11,8 +11,10 @@ export interface HttpResponse {
 
 interface RequestOptions {
   timeoutMs: number;
-  method?: "GET" | "HEAD";
+  method?: "GET" | "HEAD" | "POST";
   accept?: string;
+  body?: string;
+  headers?: Record<string, string>;
 }
 
 export function requestHttp(
@@ -21,6 +23,8 @@ export function requestHttp(
     timeoutMs,
     method = "GET",
     accept = "application/json,text/plain,*/*",
+    body,
+    headers = {},
   }: RequestOptions,
 ): Promise<HttpResponse> {
   return new Promise((resolve, reject) => {
@@ -30,6 +34,9 @@ export function requestHttp(
     xhr.open(method, url, true);
     xhr.timeout = timeoutMs;
     xhr.setRequestHeader("Accept", accept);
+    for (const [name, value] of Object.entries(headers)) {
+      xhr.setRequestHeader(name, value);
+    }
 
     xhr.onload = () => {
       const contentLengthHeader = xhr.getResponseHeader("Content-Length");
@@ -61,7 +68,7 @@ export function requestHttp(
       reject(new Error(`Request aborted: ${url}`));
     };
 
-    xhr.send();
+    xhr.send(body);
   });
 }
 
@@ -115,18 +122,16 @@ export async function fetchSearchHtml(
   return pageData.html;
 }
 
-export async function requestJson<T>(
-  url: string,
-  timeoutMs: number,
-): Promise<T> {
-  const response = await requestHttp(url, {
-    timeoutMs,
-    accept: "application/json,text/plain,*/*",
-  });
-
+function parseJsonResponse<T>(url: string, response: HttpResponse): T {
   if (response.status < 200 || response.status >= 300) {
+    let detail = response.body.trim();
+    if (detail.length > 220) {
+      detail = `${detail.slice(0, 220)}...`;
+    }
     throw new Error(
-      `Request failed: ${response.status} ${response.statusText} (${url})`,
+      detail
+        ? `Request failed: ${response.status} ${response.statusText} (${url}) — ${detail}`
+        : `Request failed: ${response.status} ${response.statusText} (${url})`,
     );
   }
 
@@ -135,4 +140,39 @@ export async function requestJson<T>(
   } catch {
     throw new Error(`Invalid JSON response from ${url}`);
   }
+}
+
+export async function requestJson<T>(
+  url: string,
+  timeoutMs: number,
+): Promise<T> {
+  const response = await requestHttp(url, {
+    timeoutMs,
+    accept: "application/json,text/plain,*/*",
+  });
+  return parseJsonResponse<T>(url, response);
+}
+
+export async function requestJsonPost<T>(
+  url: string,
+  body: unknown,
+  {
+    timeoutMs,
+    headers = {},
+  }: {
+    timeoutMs: number;
+    headers?: Record<string, string>;
+  },
+): Promise<T> {
+  const response = await requestHttp(url, {
+    timeoutMs,
+    method: "POST",
+    accept: "application/json,text/plain,*/*",
+    body: JSON.stringify(body),
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+  });
+  return parseJsonResponse<T>(url, response);
 }

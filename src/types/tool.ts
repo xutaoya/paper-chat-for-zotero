@@ -476,6 +476,7 @@ export const WEB_SEARCH_SOURCES = [
   "semantic_scholar_web",
   "google_scholar",
   "openalex",
+  "exa",
   "bing",
   "duckduckgo",
 ] as const;
@@ -486,6 +487,7 @@ export const MODEL_VISIBLE_WEB_SEARCH_SOURCES = [
   "auto",
   "google_scholar",
   "openalex",
+  "exa",
   "bing",
   "duckduckgo",
 ] as const;
