@@ -86,6 +86,23 @@ pref-pdf-settings = PDF Settings
 
 pref-pdf-parsing-settings = PDF & Parsing
 
+pref-nav-aria-label =
+    .aria-label = Settings sections
+
+pref-nav-models = Models & API
+
+pref-nav-pdf = PDF & Parsing
+
+pref-nav-web-search = Web Search
+
+pref-nav-ui = Interface
+
+pref-nav-ai-tools = AI Tools
+
+pref-nav-skills = Paper Skills
+
+pref-nav-aisummary = AI Summary
+
 pref-web-search-settings = Web Search
 
 pref-use-exa-web-search = Enable Exa web search

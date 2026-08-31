@@ -39,6 +39,7 @@ import type {
   ToolPermissionRiskLevel,
 } from "../../types/tool";
 import { ANALYTICS_EVENTS, getAnalyticsService } from "../analytics";
+import { bindPreferencesSectionNav } from "./PreferencesSectionNav";
 
 // Current selected provider ID
 let currentProviderId: string = "openai";
@@ -202,6 +203,8 @@ export function bindPrefEvents(): void {
 
   const doc = addon.data.prefs.window.document;
   const win = addon.data.prefs.window;
+
+  bindPreferencesSectionNav(doc);
 
   type PrefsWindowState = Window & {
     __paperchatPrefsFocusBound?: boolean;

@@ -1,0 +1,75 @@
+.paperchat-prefs-root {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.paperchat-prefs-shell {
+  display: flex;
+  gap: 16px;
+  min-height: 720px;
+  max-height: 92vh;
+}
+
+.paperchat-prefs-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 152px;
+  flex-shrink: 0;
+  padding: 2px 10px 2px 0;
+  border-right: 1px solid var(--color-border, #ddd);
+  overflow-y: auto;
+}
+
+.paperchat-prefs-nav-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: inherit;
+  cursor: pointer;
+  line-height: 1.35;
+}
+
+.paperchat-prefs-nav-item:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.paperchat-prefs-nav-item.is-active {
+  background: rgba(10, 132, 255, 0.14);
+  color: var(--link-color, #0a84ff);
+  font-weight: 600;
+}
+
+.paperchat-prefs-panels {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 2px 4px 8px 2px;
+}
+
+.paperchat-prefs-panel[hidden] {
+  display: none !important;
+}
+
+.paperchat-prefs-panel-title {
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.paperchat-prefs-block {
+  margin-top: 16px;
+}
+
+.paperchat-prefs-block > label > h3,
+.paperchat-prefs-block > label > html|h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}

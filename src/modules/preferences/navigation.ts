@@ -1,3 +1,5 @@
+import { showPreferencesSection } from "./PreferencesSectionNav";
+
 const AGENT_MAX_PLANNING_ITERATIONS_INPUT_ID =
   "pref-agent-max-planning-iterations";
 const PAPERCHAT_PREFERENCES_PANE_ID = "paperchat-prefpane";
@@ -26,6 +28,7 @@ export function focusAgentMaxPlanningIterationsInput(
   ) as HTMLInputElement | null | undefined;
 
   if (prefsWindow && input && isLiveInput(input, prefsWindow)) {
+    showPreferencesSection(prefsWindow.document, "ai-tools");
     input.scrollIntoView({ block: "center", behavior: "smooth" });
     try {
       input.focus({ preventScroll: true });

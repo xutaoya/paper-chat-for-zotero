@@ -4,10 +4,76 @@
     rel="stylesheet"
     href="chrome://__addonRef__/content/mineru-preferences.css"
   />
+  <html:link
+    rel="stylesheet"
+    href="chrome://__addonRef__/content/paperchat-preferences.css"
+  />
 </linkset>
 <groupbox
+  class="paperchat-prefs-root"
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
 >
+  <html:div class="paperchat-prefs-shell">
+    <html:nav
+      id="pref-section-nav"
+      class="paperchat-prefs-nav"
+      data-l10n-id="pref-nav-aria-label"
+      data-l10n-attrs="aria-label"
+    >
+      <html:button
+        type="button"
+        class="paperchat-prefs-nav-item is-active"
+        data-pref-section="models"
+        data-l10n-id="pref-nav-models"
+      ></html:button>
+      <html:button
+        type="button"
+        class="paperchat-prefs-nav-item"
+        data-pref-section="pdf"
+        data-l10n-id="pref-nav-pdf"
+      ></html:button>
+      <html:button
+        type="button"
+        class="paperchat-prefs-nav-item"
+        data-pref-section="web-search"
+        data-l10n-id="pref-nav-web-search"
+      ></html:button>
+      <html:button
+        type="button"
+        class="paperchat-prefs-nav-item"
+        data-pref-section="ui"
+        data-l10n-id="pref-nav-ui"
+      ></html:button>
+      <html:button
+        type="button"
+        class="paperchat-prefs-nav-item"
+        data-pref-section="ai-tools"
+        data-l10n-id="pref-nav-ai-tools"
+      ></html:button>
+      <html:button
+        type="button"
+        class="paperchat-prefs-nav-item"
+        data-pref-section="skills"
+        data-l10n-id="pref-nav-skills"
+      ></html:button>
+      <html:button
+        type="button"
+        class="paperchat-prefs-nav-item"
+        data-pref-section="aisummary"
+        data-l10n-id="pref-nav-aisummary"
+      ></html:button>
+    </html:nav>
+
+    <html:div id="pref-section-panels" class="paperchat-prefs-panels">
+      <html:section
+        id="pref-section-models"
+        class="paperchat-prefs-panel is-active"
+        data-pref-section="models"
+      >
+        <html:h2
+          class="paperchat-prefs-panel-title"
+          data-l10n-id="pref-nav-models"
+        ></html:h2>
   <!-- Main layout: Sidebar + Content -->
   <hbox flex="1" style="min-height: 400px">
     <!-- Provider Sidebar -->
@@ -237,8 +303,7 @@
     </vbox>
   </hbox>
 
-  <!-- Active Provider Selection -->
-  <groupbox style="margin-top: 16px">
+  <html:div class="paperchat-prefs-block">
     <label><html:h3 data-l10n-id="pref-active-provider"></html:h3></label>
     <hbox align="center">
       <label
@@ -252,11 +317,19 @@
         </menupopup>
       </menulist>
     </hbox>
-  </groupbox>
+  </html:div>
+      </html:section>
 
-  <!-- PDF & MinerU Settings -->
-  <groupbox id="pref-pdf-parsing-panel" style="margin-top: 16px">
-    <label><html:h3 data-l10n-id="pref-pdf-parsing-settings"></html:h3></label>
+      <html:section
+        id="pref-section-pdf"
+        class="paperchat-prefs-panel"
+        data-pref-section="pdf"
+        hidden="true"
+      >
+        <html:h2
+          class="paperchat-prefs-panel-title"
+          data-l10n-id="pref-nav-pdf"
+        ></html:h2>
     <hbox align="center">
       <label
         data-l10n-id="pref-upload-raw-pdf"
@@ -442,11 +515,18 @@
         </html:section>
       </html:details>
     </html:div>
-  </groupbox>
+      </html:section>
 
-  <!-- Web Search (Exa) -->
-  <groupbox id="pref-web-search-panel" style="margin-top: 16px">
-    <label><html:h3 data-l10n-id="pref-web-search-settings"></html:h3></label>
+      <html:section
+        id="pref-section-web-search"
+        class="paperchat-prefs-panel"
+        data-pref-section="web-search"
+        hidden="true"
+      >
+        <html:h2
+          class="paperchat-prefs-panel-title"
+          data-l10n-id="pref-nav-web-search"
+        ></html:h2>
     <html:div class="mineru-pref-page mineru-pref-page--embedded">
       <html:section class="mineru-pref-config">
         <html:h4
@@ -496,11 +576,18 @@
         ></label>
       </html:section>
     </html:div>
-  </groupbox>
+      </html:section>
 
-  <!-- Chat UI Settings -->
-  <groupbox style="margin-top: 16px">
-    <label><html:h3 data-l10n-id="pref-ui-settings"></html:h3></label>
+      <html:section
+        id="pref-section-ui"
+        class="paperchat-prefs-panel"
+        data-pref-section="ui"
+        hidden="true"
+      >
+        <html:h2
+          class="paperchat-prefs-panel-title"
+          data-l10n-id="pref-nav-ui"
+        ></html:h2>
     <hbox align="center" style="margin-top: 8px">
       <label
         for="pref-chat-ui-font-scale"
@@ -524,11 +611,18 @@
       data-l10n-id="pref-chat-ui-font-scale-desc"
       style="font-size: 11px; color: #666; margin-top: 4px; margin-left: 2px"
     ></label>
-  </groupbox>
+      </html:section>
 
-  <!-- AI Tools Settings -->
-  <groupbox style="margin-top: 16px">
-    <label><html:h3 data-l10n-id="pref-ai-tools-settings"></html:h3></label>
+      <html:section
+        id="pref-section-ai-tools"
+        class="paperchat-prefs-panel"
+        data-pref-section="ai-tools"
+        hidden="true"
+      >
+        <html:h2
+          class="paperchat-prefs-panel-title"
+          data-l10n-id="pref-nav-ai-tools"
+        ></html:h2>
     <hbox align="center">
       <label
         for="pref-agent-max-planning-iterations"
@@ -631,11 +725,18 @@
         </hbox>
       </vbox>
     </html:details>
-  </groupbox>
+      </html:section>
 
-  <!-- Paper Skills Settings -->
-  <groupbox style="margin-top: 16px">
-    <label><html:h3 data-l10n-id="pref-paper-skills-settings"></html:h3></label>
+      <html:section
+        id="pref-section-skills"
+        class="paperchat-prefs-panel"
+        data-pref-section="skills"
+        hidden="true"
+      >
+        <html:h2
+          class="paperchat-prefs-panel-title"
+          data-l10n-id="pref-nav-skills"
+        ></html:h2>
 
     <label
       data-l10n-id="pref-paper-skills-desc"
@@ -668,11 +769,18 @@
         style="margin-left: 10px; font-size: 11px; opacity: 0.8"
       ></label>
     </hbox>
-  </groupbox>
+      </html:section>
 
-  <!-- AISummary Settings -->
-  <groupbox style="margin-top: 16px">
-    <label><html:h3 data-l10n-id="pref-aisummary-settings"></html:h3></label>
+      <html:section
+        id="pref-section-aisummary"
+        class="paperchat-prefs-panel"
+        data-pref-section="aisummary"
+        hidden="true"
+      >
+        <html:h2
+          class="paperchat-prefs-panel-title"
+          data-l10n-id="pref-nav-aisummary"
+        ></html:h2>
 
     <!-- Automatically summarize newly added papers -->
     <hbox align="center" style="margin-bottom: 8px">
@@ -731,5 +839,7 @@
       data-l10n-id="pref-aisummary-desc"
       style="font-size: 11px; color: #666; margin-top: 8px; margin-left: 2px"
     ></label>
-  </groupbox>
+      </html:section>
+    </html:div>
+  </html:div>
 </groupbox>

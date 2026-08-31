@@ -86,6 +86,23 @@ pref-pdf-settings = PDF 设置
 
 pref-pdf-parsing-settings = PDF 与解析
 
+pref-nav-aria-label =
+    .aria-label = 设置分类
+
+pref-nav-models = 模型与 API
+
+pref-nav-pdf = PDF 与解析
+
+pref-nav-web-search = 网络搜索
+
+pref-nav-ui = 界面
+
+pref-nav-ai-tools = AI 工具
+
+pref-nav-skills = Paper Skills
+
+pref-nav-aisummary = AI 摘要
+
 pref-web-search-settings = 网络搜索
 
 pref-use-exa-web-search = 启用 Exa 网络搜索
