@@ -15,6 +15,7 @@ declare namespace _ZoteroTypes {
       "uploadRawPdfOnFailure": boolean;
       "useMineruOnExtractFailure": boolean;
       "mineruApiToken": string;
+      "mineruAutoCacheOnImport": boolean;
       "useExaWebSearch": boolean;
       "exaApiKey": string;
       "reasoningEffort": string;

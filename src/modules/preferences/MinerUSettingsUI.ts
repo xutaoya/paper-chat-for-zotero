@@ -69,6 +69,13 @@ export async function initializeMineruPrefsUI(doc: Document): Promise<void> {
     enableCheckbox.checked = getPref("useMineruOnExtractFailure") as boolean;
   }
 
+  const autoCacheCheckbox = doc.getElementById(
+    "pref-mineru-auto-cache-on-import-checkbox",
+  ) as XUL.Checkbox | null;
+  if (autoCacheCheckbox) {
+    autoCacheCheckbox.checked = getPref("mineruAutoCacheOnImport") as boolean;
+  }
+
   const tokenInput = doc.getElementById(
     "pref-mineru-api-token",
   ) as HTMLInputElement | null;
@@ -555,6 +562,13 @@ export function bindMineruPrefEvents(doc: Document): void {
   ) as XUL.Checkbox | null;
   enableCheckbox?.addEventListener("command", () => {
     setPref("useMineruOnExtractFailure", enableCheckbox.checked);
+  });
+
+  const autoCacheCheckbox = doc.getElementById(
+    "pref-mineru-auto-cache-on-import-checkbox",
+  ) as XUL.Checkbox | null;
+  autoCacheCheckbox?.addEventListener("command", () => {
+    setPref("mineruAutoCacheOnImport", autoCacheCheckbox.checked);
   });
 
   const tokenInput = doc.getElementById(

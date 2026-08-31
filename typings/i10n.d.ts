@@ -241,6 +241,8 @@ export type FluentMessageId =
   | 'pref-invalid-json'
   | 'pref-max-tokens'
   | 'pref-mineru-api-token'
+  | 'pref-mineru-auto-cache-on-import'
+  | 'pref-mineru-auto-cache-on-import-desc'
   | 'pref-mineru-cache-col-author'
   | 'pref-mineru-cache-col-date-added'
   | 'pref-mineru-cache-col-status'

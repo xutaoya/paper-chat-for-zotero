@@ -114,6 +114,10 @@ pref-upload-raw-pdf-desc = When enabled, uploads original PDF to AI if text extr
 
 pref-use-mineru-on-failure = Use MinerU when text extraction fails
 
+pref-mineru-auto-cache-on-import = Automatically pre-parse imported PDFs with MinerU
+
+pref-mineru-auto-cache-on-import-desc = Newly imported PDF attachments are queued in the background for MinerU parsing and cache storage. Requires a MinerU token.
+
 pref-mineru-api-token = MinerU Token
 
 pref-mineru-test = Test Connection

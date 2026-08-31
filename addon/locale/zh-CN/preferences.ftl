@@ -114,6 +114,10 @@ pref-upload-raw-pdf-desc = 启用后，若文本提取失败将上传原始 PDF 
 
 pref-use-mineru-on-failure = 文本提取失败时使用 MinerU 解析
 
+pref-mineru-auto-cache-on-import = 导入文献时自动开始 MinerU 预解析
+
+pref-mineru-auto-cache-on-import-desc = 新导入或新增的 PDF 附件会在后台自动排队解析并写入 MinerU 缓存；需已填写 MinerU Token。
+
 pref-mineru-api-token = MinerU Token
 
 pref-mineru-test = 测试连接

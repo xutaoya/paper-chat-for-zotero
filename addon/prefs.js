@@ -12,6 +12,7 @@ pref(
 pref("uploadRawPdfOnFailure", false);
 pref("useMineruOnExtractFailure", false);
 pref("mineruApiToken", "");
+pref("mineruAutoCacheOnImport", false);
 pref("useExaWebSearch", false);
 pref("exaApiKey", "");
 

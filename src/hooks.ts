@@ -51,6 +51,10 @@ import {
   registerLibraryChatScopeMenus,
   unregisterLibraryChatScopeMenus,
 } from "./modules/ui/LibraryChatScope";
+import {
+  getMinerUAutoCacheService,
+  destroyMinerUAutoCacheService,
+} from "./modules/chat/MinerUAutoCacheService";
 
 async function onStartup() {
   await Promise.all([
@@ -115,6 +119,7 @@ async function onStartup() {
   );
 
   addon.data.initialized = true;
+  getMinerUAutoCacheService().register();
   getAnalyticsService().track(ANALYTICS_EVENTS.pluginStarted, {
     startup_mode: "normal",
   });
@@ -195,6 +200,7 @@ async function onShutdown(): Promise<void> {
   destroyMemoryIndexers();
   // Destroy PdfToolManager (clears in-memory paper structure cache)
   destroyPdfToolManager();
+  destroyMinerUAutoCacheService();
   // Destroy StorageDatabase
   await destroyStorageDatabase();
   await destroyAnalyticsService();

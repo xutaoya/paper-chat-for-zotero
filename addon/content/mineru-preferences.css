@@ -58,6 +58,14 @@
   opacity: 0.85;
 }
 
+.mineru-pref-inline-desc {
+  display: block;
+  margin: 4px 0 0 2px;
+  font-size: 11px;
+  color: var(--mineru-text-secondary, #666);
+  line-height: 1.45;
+}
+
 .mineru-pref-config-row {
   display: flex;
   align-items: center;
