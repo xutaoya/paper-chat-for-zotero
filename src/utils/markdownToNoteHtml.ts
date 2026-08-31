@@ -67,8 +67,42 @@ export function compactMathLineSpacing(markdown: string): string {
   return separateMathParagraphs(markdown);
 }
 
+function normalizeEmphasisDelimiters(markdown: string): string {
+  let normalized = markdown.replace(
+    /\*\*([^*\n]+?)\s+\*\*/g,
+    (_, text: string) => `**${text.trimEnd()}**`,
+  );
+  normalized = normalized.replace(
+    /\*\*\s+([^*\n]+?)\*\*/g,
+    (_, text: string) => `**${text.trimStart()}**`,
+  );
+  normalized = normalized.replace(
+    /__([^_\n]+?)\s+__/g,
+    (_, text: string) => `__${text.trimEnd()}__`,
+  );
+  normalized = normalized.replace(
+    /__\s+([^_\n]+?)__/g,
+    (_, text: string) => `__${text.trimStart()}__`,
+  );
+  normalized = normalized.replace(
+    /(?<!\*)\*([^*\n]+?)\s+\*(?!\*)/g,
+    (_, text: string) => `*${text.trimEnd()}*`,
+  );
+  normalized = normalized.replace(
+    /(?<!\*)\*\s+([^*\n]+?)\*(?!\*)/g,
+    (_, text: string) => `*${text.trimStart()}*`,
+  );
+  return normalized;
+}
+
+export function normalizeMarkdownForNotes(markdown: string): string {
+  return normalizeEmphasisDelimiters(markdown);
+}
+
 export function markdownToNoteHtml(markdown: string): string {
-  const trimmed = separateMathParagraphs(markdown.trim());
+  const trimmed = separateMathParagraphs(
+    normalizeMarkdownForNotes(markdown.trim()),
+  );
   if (!trimmed) {
     return "";
   }

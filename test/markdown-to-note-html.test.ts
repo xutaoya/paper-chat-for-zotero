@@ -23,6 +23,20 @@ describe("markdownToNoteHtml", function () {
     assert.include(html, "<strong>ok</strong>");
   });
 
+  it("normalizes bold markers with whitespace inside delimiters", function () {
+    const html = markdownToNoteHtml(
+      "此外，许多研究表明 **图像重建 (IR) ** 可作为辅助任务。",
+    );
+    assert.include(html, "<strong>图像重建 (IR)</strong>");
+    assert.notInclude(html, "**");
+  });
+
+  it("normalizes italic markers with whitespace inside delimiters", function () {
+    const html = markdownToNoteHtml("这是 *重要结论 * 的说明。");
+    assert.include(html, "<em>重要结论</em>");
+    assert.notInclude(html, "*重要结论 *");
+  });
+
   it("emits Zotero inline math nodes with LaTeX preserved", function () {
     const html = markdownToNoteHtml(
       "$h'(t) = Ah(t) + Bx(t) \\quad \\text{(Eq. 1)}$",
