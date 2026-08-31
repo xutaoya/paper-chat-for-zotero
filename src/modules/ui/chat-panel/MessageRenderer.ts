@@ -22,6 +22,7 @@ import type {
 } from "../../../types/tool";
 import { chatColors } from "../../../utils/colors";
 import type { ThemeColors } from "./types";
+import { showChatPanelToast } from "./ChatPanelToast";
 import { HTML_NS } from "./types";
 import {
   formatMarkdownForMessageCopy,
@@ -462,7 +463,9 @@ export interface MessageRenderOptions {
   onDeleteTurnError?: (error: Error) => void;
   onQuoteReply?: (assistantMessageId: string) => void;
   onNavigateToQuotedMessage?: (quote: QuotedMessageRef) => void | Promise<void>;
-  onSummarizeReply?: (assistantMessageId: string) => void | Promise<void>;
+  onSummarizeReply?: (
+    assistantMessageId: string,
+  ) => string | void | Promise<string | void>;
   onSummarizeReplyError?: (error: Error) => void;
   onRenderComplete?: () => void;
 }
@@ -1365,11 +1368,42 @@ function createQuoteReplyButton(
   return btn;
 }
 
+function resolveChatPanelContainer(node: HTMLElement): HTMLElement | null {
+  return node.closest(`#${config.addonRef}-chat-container`) as HTMLElement | null;
+}
+
+function resolveMessageAnchor(node: HTMLElement): HTMLElement | null {
+  return node.closest(".chat-message") as HTMLElement | null;
+}
+
+function showInlineMessageActionSuccess(
+  button: HTMLElement,
+  message: string,
+  restoreIcon: MessageActionIconName,
+  restoreLabel: string,
+): void {
+  button.textContent = "\u2713";
+  button.setAttribute("title", message);
+  button.setAttribute("aria-label", message);
+  button.style.color = chatColors.successBubbleText;
+  showChatPanelToast(resolveChatPanelContainer(button), message, "success", {
+    anchor: resolveMessageAnchor(button) ?? button,
+  });
+  setTimeout(() => {
+    setIconButtonImage(button, restoreIcon, restoreLabel);
+    button.setAttribute("title", restoreLabel);
+    button.setAttribute("aria-label", restoreLabel);
+    button.style.color = "";
+  }, 1800);
+}
+
 function createSummarizeReplyButton(
   doc: Document,
   theme: ThemeColors,
   assistantMessageId: string,
-  onSummarizeReply: (assistantMessageId: string) => void | Promise<void>,
+  onSummarizeReply: (
+    assistantMessageId: string,
+  ) => string | void | Promise<string | void>,
   onError?: (error: Error) => void,
 ): HTMLElement {
   const label = getString("chat-summarize-reply-note");
@@ -1390,8 +1424,13 @@ function createSummarizeReplyButton(
     btn.style.cursor = "wait";
     btn.style.opacity = "0.6";
 
-    Promise.resolve(onSummarizeReply(assistantMessageId))
-      .catch((error: unknown) => {
+    void (async () => {
+      try {
+        const successMessage = await onSummarizeReply(assistantMessageId);
+        if (typeof successMessage === "string" && successMessage.trim()) {
+          showInlineMessageActionSuccess(btn, successMessage, "write", label);
+        }
+      } catch (error: unknown) {
         const summaryError =
           error instanceof Error ? error : new Error(String(error));
         ztoolkit.log(
@@ -1399,14 +1438,14 @@ function createSummarizeReplyButton(
           summaryError,
         );
         onError?.(summaryError);
-      })
-      .finally(() => {
+      } finally {
         btn.removeAttribute("data-busy");
         btn.removeAttribute("aria-busy");
         (btn as HTMLButtonElement).disabled = false;
         btn.style.cursor = "pointer";
         btn.style.opacity = "1";
-      });
+      }
+    })();
   });
 
   return btn;
@@ -1449,7 +1488,9 @@ function createMessageActions(
   onDeleteTurn?: (assistantMessageId: string) => void | Promise<void>,
   onDeleteTurnError?: (error: Error) => void,
   onQuoteReply?: (assistantMessageId: string) => void,
-  onSummarizeReply?: (assistantMessageId: string) => void | Promise<void>,
+  onSummarizeReply?: (
+    assistantMessageId: string,
+  ) => string | void | Promise<string | void>,
   onSummarizeReplyError?: (error: Error) => void,
 ): HTMLElement | null {
   const actions = createElement(

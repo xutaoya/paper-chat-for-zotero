@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
 import {
+  preserveEmphasisInMarkdownForNotes,
   renderMathInMarkdownForNotes,
   restorePreservedNoteMarkup,
   unwrapBlockMathParagraphs,
@@ -110,7 +111,8 @@ export function markdownToNoteHtml(markdown: string): string {
     renderCodeBlock: (match) => noteMarkdown.render(match),
     renderInlineCode: (match) => noteMarkdown.renderInline(match),
   });
-  const html = noteMarkdown.render(processed).trim();
+  const withEmphasis = preserveEmphasisInMarkdownForNotes(processed, preserved);
+  const html = noteMarkdown.render(withEmphasis).trim();
   return unwrapBlockMathParagraphs(
     restorePreservedNoteMarkup(html, preserved),
   );

@@ -31,6 +31,14 @@ describe("markdownToNoteHtml", function () {
     assert.notInclude(html, "**");
   });
 
+  it("renders bold when closing delimiter is followed by CJK text", function () {
+    const html = markdownToNoteHtml(
+      "此外，许多研究[13], [17], [28]-[32]表明把**图像重建 (IR) **作为辅助任务可显著提升 MMIF。",
+    );
+    assert.include(html, "<strong>图像重建 (IR)</strong>");
+    assert.notInclude(html, "**");
+  });
+
   it("normalizes italic markers with whitespace inside delimiters", function () {
     const html = markdownToNoteHtml("这是 *重要结论 * 的说明。");
     assert.include(html, "<em>重要结论</em>");

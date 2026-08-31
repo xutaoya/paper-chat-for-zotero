@@ -32,7 +32,6 @@ import { isPathInsidePresentationRoot } from "../../presentation";
 import type { PresentationLaunchSettings } from "../../presentation/PresentationLaunchSettings";
 
 import { type AttachmentState, type ChatPanelContext } from "./types";
-import { chatColors } from "../../../utils/colors";
 import {
   getCurrentTheme,
   updateCurrentTheme,
@@ -67,6 +66,7 @@ import {
 } from "./MarkdownRenderer";
 import { getDataPath } from "../../../utils/common";
 import { markdownToNoteHtml } from "../../../utils/markdownToNoteHtml";
+import { showChatPanelToast } from "./ChatPanelToast";
 import {
   canSummarizeAssistantReply,
   collectNoteSummarySourceItemKeys,
@@ -617,7 +617,9 @@ interface ChatMessageRenderCallbacks {
   onDeleteTurnError?: (error: Error) => void;
   onQuoteReply?: (assistantMessageId: string) => void;
   onNavigateToQuotedMessage?: (quote: QuotedMessageRef) => void | Promise<void>;
-  onSummarizeReply?: (assistantMessageId: string) => void | Promise<void>;
+  onSummarizeReply?: (
+    assistantMessageId: string,
+  ) => string | void | Promise<string | void>;
   onSummarizeReplyError?: (error: Error) => void;
   onResumePresentation?: (
     assistantMessageId: string,
@@ -780,38 +782,7 @@ function appendChatStatusMessage(
   message: string,
   kind: "error" | "success",
 ): void {
-  if (!container) {
-    return;
-  }
-
-  const chatHistory = container.querySelector("#chat-history") as HTMLElement;
-  const doc = container.ownerDocument;
-  if (!chatHistory || !doc) {
-    return;
-  }
-
-  const isError = kind === "error";
-  const wrapper = doc.createElement("div");
-  wrapper.className = `message-wrapper ${isError ? "error" : "success"}-message-wrapper`;
-
-  const bubble = doc.createElement("div");
-  bubble.className = `message-bubble ${isError ? "error" : "success"}-bubble`;
-  bubble.style.cssText = isError
-    ? `background: ${chatColors.errorBubbleBg}; border: 1px solid ${chatColors.errorBubbleBorder}; color: ${chatColors.errorBubbleText}; padding: 12px; border-radius: 8px; margin: 8px 0;`
-    : `background: ${chatColors.successBubbleBg}; border: 1px solid ${chatColors.successBubbleBorder}; color: ${chatColors.successBubbleText}; padding: 12px; border-radius: 8px; margin: 8px 0;`;
-
-  const content = doc.createElement("div");
-  content.className = "message-content";
-  content.textContent = isError ? `⚠️ ${message}` : `✓ ${message}`;
-
-  bubble.appendChild(content);
-  wrapper.appendChild(bubble);
-  chatHistory.appendChild(wrapper);
-  if (shouldAutoScrollChatHistory(chatHistory)) {
-    scrollChatHistoryToBottom(chatHistory);
-  } else {
-    updateChatHistoryScrollBottomButton(chatHistory);
-  }
+  showChatPanelToast(container, message, kind);
 }
 
 function handleNoteToolCompleted(
@@ -861,7 +832,7 @@ function handleNoteToolCompleted(
 async function copyReplyToItemNote(
   context: ChatPanelContext,
   assistantMessageId: string,
-): Promise<void> {
+): Promise<string> {
   const session = context.chatManager.getActiveSession();
   const message = session?.messages.find(
     (candidate) => candidate.id === assistantMessageId,
@@ -892,11 +863,9 @@ async function copyReplyToItemNote(
     throw new Error(result.replace(/^Error:\s*/, ""));
   }
 
-  context.appendSuccess(
-    getString("chat-copy-reply-note-success", {
-      args: { title: getItemTitleByKey(itemKey) },
-    }),
-  );
+  return getString("chat-copy-reply-note-success", {
+    args: { title: getItemTitleByKey(itemKey) },
+  });
 }
 
 function buildApprovalActionsForContainer(

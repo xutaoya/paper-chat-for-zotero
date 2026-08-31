@@ -8,6 +8,12 @@ function escapeMathHtml(text: string): string {
     .replace(/>/g, "&gt;");
 }
 
+function escapeHtml(text: string): string {
+  return escapeMathHtml(text)
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function shouldUseBlockMath(latex: string): boolean {
   return latex.includes("\n") || /\\tag\b/.test(latex);
 }
@@ -22,6 +28,35 @@ function zoteroBlockMathHtml(latex: string): string {
   return `<pre class="math">$$${escapeMathHtml(latex)}$$</pre>`;
 }
 
+function preserveToken(preserved: string[], html: string): string {
+  preserved.push(html);
+  return `${PRESERVE_TOKEN_PREFIX}${preserved.length - 1}${PRESERVE_TOKEN_SUFFIX}`;
+}
+
+export function preserveEmphasisInMarkdownForNotes(
+  content: string,
+  preserved: string[],
+): string {
+  let processed = content.replace(
+    /\*\*([^*\n]+?)\*\*/g,
+    (match, text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return match;
+      }
+      return preserveToken(preserved, `<strong>${escapeHtml(trimmed)}</strong>`);
+    },
+  );
+  processed = processed.replace(/__([^_\n]+?)__/g, (match, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return match;
+    }
+    return preserveToken(preserved, `<strong>${escapeHtml(trimmed)}</strong>`);
+  });
+  return processed;
+}
+
 export function renderMathInMarkdownForNotes(
   content: string,
   options: {
@@ -32,10 +67,7 @@ export function renderMathInMarkdownForNotes(
   const preserved: string[] = [];
   let processed = content;
 
-  const preserve = (html: string): string => {
-    preserved.push(html);
-    return `${PRESERVE_TOKEN_PREFIX}${preserved.length - 1}${PRESERVE_TOKEN_SUFFIX}`;
-  };
+  const preserve = (html: string): string => preserveToken(preserved, html);
 
   processed = processed.replace(/```[\s\S]*?```/g, (match) => {
     return preserve(options.renderCodeBlock(match));

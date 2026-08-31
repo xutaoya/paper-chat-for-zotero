@@ -95,6 +95,33 @@
   background: rgba(255, 100, 100, 0.2);
 }
 
+.chat-panel-toast {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  z-index: 20;
+  max-width: calc(100% - 24px);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  white-space: normal;
+  word-break: break-word;
+  transform: translateX(-50%) translateY(-8px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.chat-panel-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* Chat History */
 .chat-history {
   flex: 1;
