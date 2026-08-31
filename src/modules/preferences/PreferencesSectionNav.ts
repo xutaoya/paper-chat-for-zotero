@@ -41,7 +41,10 @@ function storeSection(doc: Document, sectionId: PreferencesSectionId): void {
   }
 }
 
-function asHtmlElement(node: Node): HTMLElement | null {
+function asHtmlElement(node: Node | null | undefined): HTMLElement | null {
+  if (!node) {
+    return null;
+  }
   const element = node as HTMLElement;
   return typeof element.getAttribute === "function" ? element : null;
 }
