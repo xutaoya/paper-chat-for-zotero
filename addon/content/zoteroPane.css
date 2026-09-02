@@ -193,6 +193,19 @@
   text-align: right;
 }
 
+.user-message .chat-bubble[data-editable="true"]:hover {
+  filter: brightness(0.98);
+}
+
+#chat-input-wrapper.chat-composer--editing {
+  border-color: var(--composer-border-focus, #2563eb);
+}
+
+#chat-edit-message-banner {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .assistant-message-wrapper {
   text-align: left;
 }
@@ -820,6 +833,10 @@
 #chat-message-input {
   position: relative;
   z-index: 1;
+}
+
+#chat-next-question-hint {
+  z-index: 3;
 }
 
 #chat-context-item-badge {

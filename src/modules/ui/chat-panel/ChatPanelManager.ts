@@ -56,7 +56,7 @@ import {
   updateUserInputRequestView,
   type ApprovalViewTransitionState,
 } from "./MessageRenderer";
-import { ensureConversationNavigator } from "./ConversationNavigator";
+import { syncConversationNavigator } from "./ConversationNavigator";
 import {
   type MarkdownRenderOptions,
   type SourceGroupActionContext,
@@ -104,6 +104,7 @@ import {
   NextQuestionHintController,
   requestNextQuestionHintAfterRecentRender,
 } from "./NextQuestionHintController";
+import { UserMessageEditController } from "./UserMessageEditController";
 import {
   resolveFloatingWindowSize,
   normalizeFloatingWindowSize,
@@ -631,6 +632,27 @@ interface ChatMessageRenderCallbacks {
   onCancelPresentationError?: (error: Error) => void;
   onMarkdownError?: (message: string) => void;
   onRenderComplete?: () => void;
+  onEditUserMessage?: (userMessageId: string) => void;
+  editingUserMessageId?: string | null;
+}
+
+function buildUserMessageEditRenderCallbacks(
+  context: ChatPanelContext,
+  messages: ChatMessage[],
+): Pick<
+  ChatMessageRenderCallbacks,
+  "onEditUserMessage" | "editingUserMessageId"
+> {
+  const editController = UserMessageEditController.attach(context);
+  return {
+    editingUserMessageId: editController.getEditingUserMessageId(),
+    onEditUserMessage: (userMessageId) => {
+      const message = messages.find((entry) => entry.id === userMessageId);
+      if (message) {
+        editController.beginEdit(message);
+      }
+    },
+  };
 }
 
 function renderMessageElementsWithMarkdownActions(
@@ -684,6 +706,8 @@ function renderMessageElementsWithMarkdownActions(
       onNavigateToQuotedMessage: callbacks.onNavigateToQuotedMessage,
       onSummarizeReply: callbacks.onSummarizeReply,
       onSummarizeReplyError: callbacks.onSummarizeReplyError,
+      onEditUserMessage: callbacks.onEditUserMessage,
+      editingUserMessageId: callbacks.editingUserMessageId,
       onRenderComplete: callbacks.onRenderComplete,
     },
   );
@@ -1693,6 +1717,7 @@ function renderActiveSessionInContainer(
     session.messages,
     () => getQuoteNavigationItem(session, moduleCurrentItem),
     {
+      ...buildUserMessageEditRenderCallbacks(refreshContext, session.messages),
       onFork: (assistantMessageId) =>
         continueInNewChatFromMessage(refreshContext, assistantMessageId),
       onDeleteTurn: async (assistantMessageId) => {
@@ -1731,6 +1756,13 @@ function renderActiveSessionInContainer(
         refreshContext.appendError(error.message);
       },
       onMarkdownError: refreshContext.appendError,
+      onRenderComplete: () => {
+        syncConversationNavigator(
+          container,
+          manager.getActiveSession()?.messages ?? session.messages,
+          getCurrentTheme(),
+        );
+      },
     },
   );
   updateConversationNoteSummaryButton(
@@ -2831,6 +2863,7 @@ function createContext(container: HTMLElement): ChatPanelContext {
             messages,
             () => getQuoteNavigationItem(session, moduleCurrentItem),
             {
+              ...buildUserMessageEditRenderCallbacks(context, messages),
               retryableErrorMessageId,
               onRetry: async () => {
                 if (
@@ -2897,10 +2930,11 @@ function createContext(container: HTMLElement): ChatPanelContext {
               },
               onMarkdownError: context.appendError,
               onRenderComplete: () => {
-                ensureConversationNavigator(
+                syncConversationNavigator(
                   container,
+                  messages,
                   getCurrentTheme(),
-                )?.update(messages);
+                );
                 refreshContextWindowUsageForContainer(container);
                 onRenderComplete?.();
               },

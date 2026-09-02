@@ -56,6 +56,8 @@ export interface ChatMessage {
   files?: FileAttachment[];
   quotedMessages?: QuotedMessageRef[];
   timestamp: number;
+  /** Set when the user edits and resends an existing user message. */
+  editedAt?: number;
   pdfContext?: boolean; // 是否包含PDF上下文
   selectedText?: string; // 选中的PDF文本
   // Tool calling 相关

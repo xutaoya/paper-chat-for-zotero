@@ -19,6 +19,24 @@ type HostElement = HTMLElement & {
   [CONTROLLER_KEY]?: NextQuestionHintController;
 };
 
+function scheduleNextFrame(callback: () => void, doc: Document): void {
+  const view = (doc.defaultView ?? Zotero.getMainWindow()) as Window | null;
+  if (view && typeof view.requestAnimationFrame === "function") {
+    view.requestAnimationFrame(callback);
+    return;
+  }
+  setTimeout(callback, 0);
+}
+
+function setInputPlaceholder(input: HTMLTextAreaElement, placeholder: string): void {
+  input.placeholder = placeholder;
+  if (placeholder) {
+    input.setAttribute("placeholder", placeholder);
+  } else {
+    input.removeAttribute("placeholder");
+  }
+}
+
 export class NextQuestionHintController {
   private readonly service = getNextQuestionHintService();
   private readonly input: HTMLTextAreaElement | null;
@@ -55,7 +73,7 @@ export class NextQuestionHintController {
   };
 
   private readonly onInput = () => {
-    if (this.input?.value) {
+    if (this.input?.value.trim()) {
       this.generationController?.abort();
       this.dismissHint();
     } else {
@@ -78,6 +96,15 @@ export class NextQuestionHintController {
 
   private readonly onFocus = () => {
     this.syncVisibility();
+    const doc = this.input?.ownerDocument;
+    if (!doc) {
+      return;
+    }
+    scheduleNextFrame(() => {
+      if (!this.disposed) {
+        this.syncVisibility();
+      }
+    }, doc);
   };
 
   constructor(private readonly context: ChatPanelContext) {
@@ -265,7 +292,10 @@ export class NextQuestionHintController {
     if (this.isMentionPopupVisible()) {
       return false;
     }
-    return this.hintLayer?.style.display === "flex";
+    if (this.input.value.trim()) {
+      return false;
+    }
+    return true;
   }
 
   private isReady(): boolean {
@@ -339,13 +369,13 @@ export class NextQuestionHintController {
     const visible =
       !!this.hint &&
       !this.disposed &&
-      !this.input?.value &&
+      !this.input?.value.trim() &&
       !this.isMentionPopupVisible();
     this.hintLayer.style.display = visible ? "flex" : "none";
     if (visible) {
       syncComposerHintOffset(this.context.container);
     }
-    this.syncNativePlaceholder(visible);
+    this.syncNativePlaceholder();
   }
 
   private isMentionPopupVisible(): boolean {
@@ -380,7 +410,7 @@ export class NextQuestionHintController {
       alignItems: "center",
       gap: "8px",
       pointerEvents: "none",
-      zIndex: "1",
+      zIndex: "3",
       color: theme.textMuted,
       fontSize: "14px",
       lineHeight: "18px",
@@ -412,16 +442,23 @@ export class NextQuestionHintController {
     return layer;
   }
 
-  private syncNativePlaceholder(visible: boolean): void {
+  private shouldHideNativePlaceholder(): boolean {
+    return !!this.hint && !this.input?.value.trim();
+  }
+
+  private syncNativePlaceholder(): void {
     if (!this.input) {
       return;
     }
-    this.input.placeholder = visible ? "" : this.originalPlaceholder;
+    setInputPlaceholder(
+      this.input,
+      this.shouldHideNativePlaceholder() ? "" : this.originalPlaceholder,
+    );
   }
 
   private restorePlaceholder(): void {
     if (this.input) {
-      this.input.placeholder = this.originalPlaceholder;
+      setInputPlaceholder(this.input, this.originalPlaceholder);
     }
   }
 }

@@ -158,6 +158,20 @@ paperchat-chat-delete = 删除
 
 paperchat-chat-edit-title = 编辑标题
 
+paperchat-chat-edit-message-banner = 正在编辑消息，发送后将更新此条并替换后续对话
+
+paperchat-chat-edit-message-cancel = 取消
+
+paperchat-chat-edit-message-hint = 点击编辑并重新发送
+
+paperchat-chat-edit-message-busy = 请等待当前回复完成后再编辑消息
+
+paperchat-chat-edit-message-pending-input = 请先回答待处理的问题，再编辑消息
+
+paperchat-chat-edit-message-failed = 无法编辑这条消息
+
+paperchat-chat-message-edited = 已编辑
+
 paperchat-chat-copy = 复制
 
 paperchat-chat-quote-reply = 引用此回复

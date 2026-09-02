@@ -780,12 +780,20 @@ export function attachConversationNavigator(
           0,
           resolveActiveRailItemIndex(items, chatHistory),
         );
-        renderTickMarks();
-        if (highlightedIndex >= items.length) {
-          highlightedIndex = -1;
-          hidePreview(elements);
-        } else if (highlightedIndex >= 0) {
-          showPreviewForItem(highlightedIndex);
+        const renderStructure = () => {
+          renderTickMarks();
+          if (highlightedIndex >= items.length) {
+            highlightedIndex = -1;
+            hidePreview(elements);
+          } else if (highlightedIndex >= 0) {
+            showPreviewForItem(highlightedIndex);
+          }
+        };
+        const view = chatHistory.ownerDocument?.defaultView;
+        if (view?.requestAnimationFrame) {
+          view.requestAnimationFrame(renderStructure);
+        } else {
+          renderStructure();
         }
         return;
       }
@@ -835,6 +843,14 @@ export function ensureConversationNavigator(
   );
   navigatorControllers.set(container, controller);
   return controller;
+}
+
+export function syncConversationNavigator(
+  container: HTMLElement,
+  messages: ChatMessage[],
+  theme: ThemeColors,
+): void {
+  ensureConversationNavigator(container, theme)?.update(messages);
 }
 
 export function disposeConversationNavigator(container: HTMLElement): void {

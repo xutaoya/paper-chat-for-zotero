@@ -3,6 +3,7 @@ import { openSourceTarget } from "../src/modules/ui/chat-panel/SourceNavigator.t
 import {
   clearPdfQuoteHighlight,
   navigateToPdfQuote,
+  sanitizeQuoteForNavigation,
 } from "../src/modules/ui/chat-panel/PdfQuoteNavigator.ts";
 
 interface ZoteroMock {
@@ -555,7 +556,7 @@ describe("typed source navigation", function () {
     assert.deepEqual(openedLocation, { pageIndex: 5 });
   });
 
-  it("flashes a self-owned overlay twice without touching Selection", async function () {
+  it("flashes a self-owned overlay twice before removing it", async function () {
     this.timeout(3000);
     const quote =
       "A sufficiently long grounded quotation that appears on the PDF page.";
@@ -604,6 +605,15 @@ describe("typed source navigation", function () {
     assert.equal(findOverlay()?.style.opacity, "1");
     await new Promise((resolve) => setTimeout(resolve, 600));
     assert.isUndefined(findOverlay());
+  });
+
+  it("strips citation metadata before locating a quote", function () {
+    const quote =
+      "For image processing, VMamba [41] introduces the 2D Selective Scan Module (2D-SSM), which flattens 2D images into four 1D sequences and scans along four distinct directions.";
+    const sanitized = sanitizeQuoteForNavigation(
+      `${quote}\n(第3页 §II.B 原文)`,
+    );
+    assert.equal(sanitized, quote);
   });
 
   it("highlights a PDF quote when the rendered blockquote adds quotation marks", async function () {

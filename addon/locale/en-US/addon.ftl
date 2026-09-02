@@ -158,6 +158,20 @@ paperchat-chat-delete = Delete
 
 paperchat-chat-edit-title = Edit title
 
+paperchat-chat-edit-message-banner = Editing message. Sending will update it and replace later turns.
+
+paperchat-chat-edit-message-cancel = Cancel
+
+paperchat-chat-edit-message-hint = Click to edit and resend
+
+paperchat-chat-edit-message-busy = Wait for the current response to finish before editing a message
+
+paperchat-chat-edit-message-pending-input = Answer the pending question before editing a message
+
+paperchat-chat-edit-message-failed = Could not edit this message
+
+paperchat-chat-message-edited = Edited
+
 paperchat-chat-copy = Copy
 
 paperchat-chat-quote-reply = Quote this reply

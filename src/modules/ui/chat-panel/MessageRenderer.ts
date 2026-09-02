@@ -11,6 +11,7 @@ import type {
   QuotedMessageRef,
   ToolApprovalState,
 } from "../../chat";
+import { extractEditableUserMessageContent } from "../../chat/user-message-edit";
 import type { UserInputRequestState } from "../../../types/chat";
 import {
   NOTE_SUMMARY_DESTINATION_QUESTION_ID,
@@ -467,6 +468,8 @@ export interface MessageRenderOptions {
     assistantMessageId: string,
   ) => string | void | Promise<string | void>;
   onSummarizeReplyError?: (error: Error) => void;
+  onEditUserMessage?: (userMessageId: string) => void;
+  editingUserMessageId?: string | null;
   onRenderComplete?: () => void;
 }
 
@@ -877,12 +880,10 @@ export function createMessageElement(
   let rawContent = msg.content;
 
   if (msg.role === "user") {
-    // Format user message for display
+    const editableContent = extractEditableUserMessageContent(msg);
     const displayContent = msg.selectedText
-      ? `[Selected]: ${msg.selectedText}\n\n${msg.content.split("[Question]:").pop()?.trim() || msg.content}`
-      : msg.content.includes("[Question]:")
-        ? msg.content.split("[Question]:").pop()?.trim() || msg.content
-        : msg.content;
+      ? `[Selected]: ${msg.selectedText}\n\n${editableContent}`
+      : editableContent;
     content.textContent = displayContent;
     rawContent = displayContent;
   } else if (msg.role === "error") {
@@ -996,6 +997,23 @@ export function createMessageElement(
 
   bubble.appendChild(content);
 
+  if (msg.role === "user" && msg.editedAt) {
+    const editedLabel = createElement(
+      doc,
+      "div",
+      {
+        marginTop: "6px",
+        fontSize: "11px",
+        lineHeight: "1.3",
+        color: theme.textMuted,
+        textAlign: "right",
+      },
+      { class: "chat-message-edited-label" },
+    );
+    editedLabel.textContent = getString("chat-message-edited");
+    bubble.appendChild(editedLabel);
+  }
+
   if (msg.role === "user" && msg.images?.some(isRenderableImageAttachment)) {
     bubble.appendChild(createMessageImagesElement(doc, msg.images));
   }
@@ -1004,6 +1022,31 @@ export function createMessageElement(
     bubble.appendChild(
       createInterruptedFooter(doc, theme, attachedError, attachedNotices),
     );
+  }
+
+  if (msg.role === "user" && msg.streamingState === undefined && !msg.isSystemNotice) {
+    bubble.dataset.editable = "true";
+    bubble.title = getString("chat-edit-message-hint");
+    if (renderOptions.onEditUserMessage) {
+      bubble.style.cursor = "pointer";
+    }
+    if (renderOptions.editingUserMessageId === msg.id) {
+      wrapper.classList.add("chat-message--editing");
+      bubble.style.boxShadow = `0 0 0 2px ${theme.inputFocusBorderColor}`;
+    }
+    if (renderOptions.onEditUserMessage) {
+      bubble.addEventListener("click", (event) => {
+        const target = event.target as Element | null;
+        if (target?.closest("button, a, [data-quoted-message-id]")) {
+          return;
+        }
+        const selection = bubble.ownerDocument.getSelection();
+        if (selection && !selection.isCollapsed && selection.toString().trim()) {
+          return;
+        }
+        renderOptions.onEditUserMessage?.(msg.id);
+      });
+    }
   }
 
   wrapper.appendChild(bubble);

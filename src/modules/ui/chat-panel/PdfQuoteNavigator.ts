@@ -3,11 +3,11 @@ import { parsePages } from "../../chat/pdf-tools/paperParser";
 const MIN_QUOTE_SEARCH_LENGTH = 12;
 const MAX_QUOTE_SEARCH_LENGTH = 480;
 const MAX_OVERLAY_HIGHLIGHT_LENGTH = 180;
-const READER_OPEN_TIMEOUT_MS = 2500;
+const READER_OPEN_TIMEOUT_MS = 4500;
 const READER_POLL_MS = 40;
 const SCROLL_SETTLE_MS = 120;
-const HIGHLIGHT_ON_MS = 600;
-const HIGHLIGHT_OFF_MS = 160;
+const HIGHLIGHT_PULSE_ON_MS = 600;
+const HIGHLIGHT_PULSE_OFF_MS = 160;
 const OVERLAY_ATTRIBUTE = "data-paperchat-pdf-quote-overlay";
 const WRAPPING_QUOTE_PAIRS = [
   ['"', '"'],
@@ -169,6 +169,41 @@ function normalizeForSearch(text: string): string {
     .toLowerCase();
 }
 
+function isCitationMetadataLine(line: string): boolean {
+  const trimmed = line.trim();
+  return (
+    /^[（(].*(?:\d+\s*页|page\s*\d+|p\.?\s*\d+|§|section|原文|source).*?[）)]$/iu.test(
+      trimmed,
+    ) || /^第\d+页/u.test(trimmed)
+  );
+}
+
+export function sanitizeQuoteForNavigation(quoteText: string): string {
+  const lines = quoteText
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  while (lines.length > 1 && isCitationMetadataLine(lines.at(-1)!)) {
+    lines.pop();
+  }
+
+  let text = lines.join("\n").trim();
+  text = text
+    .replace(
+      /\s*[（(][^)）]*?(?:\d+\s*页|page\s*\d+|p\.?\s*\d+|§|section|原文|source)[^)）]*[）)]\s*$/iu,
+      "",
+    )
+    .trim();
+  return text;
+}
+
+function stripInlineCitations(text: string): string {
+  return text
+    .replace(/\s*\[[^\]]+\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function unwrapQuotedText(text: string): string {
   for (const [opening, closing] of WRAPPING_QUOTE_PAIRS) {
     if (text.startsWith(opening) && text.endsWith(closing)) {
@@ -185,9 +220,10 @@ function getSearchNeedles(quoteText: string): string[] {
   }
 
   const unquoted = unwrapQuotedText(normalized);
-  const variants = Array.from(new Set([normalized, unquoted])).filter(
-    (variant) => variant.length >= MIN_QUOTE_SEARCH_LENGTH,
-  );
+  const withoutCitations = stripInlineCitations(unquoted);
+  const variants = Array.from(
+    new Set([normalized, unquoted, withoutCitations]),
+  ).filter((variant) => variant.length >= MIN_QUOTE_SEARCH_LENGTH);
 
   return Array.from(
     new Set(
@@ -353,6 +389,7 @@ async function waitForTextLayer(
   while (isCurrentHighlight(generation) && Date.now() < deadline) {
     for (const readerWindow of getReaderWindows(reader)) {
       try {
+        await readerWindow.PDFViewerApplication?.initializedPromise;
         const layer =
           readerWindow.document.querySelector<HTMLElement>(selector);
         if (layer?.textContent?.trim()) {
@@ -604,8 +641,8 @@ function createQuoteOverlay(
     highlight.style.width = `${rect.width / scaleX}px`;
     highlight.style.height = `${rect.height / scaleY}px`;
     highlight.style.borderRadius = "2px";
-    highlight.style.background = "rgba(59, 130, 246, 0.38)";
-    highlight.style.boxShadow = "0 0 0 1px rgba(37, 99, 235, 0.12)";
+    highlight.style.background = "rgba(250, 204, 21, 0.42)";
+    highlight.style.boxShadow = "0 0 0 1px rgba(234, 179, 8, 0.28)";
     root.appendChild(highlight);
   }
 
@@ -625,12 +662,12 @@ function scheduleOverlayFlash(root: HTMLElement, generation: number): void {
     if (isCurrentHighlight(generation) && activeOverlay?.root === root) {
       root.style.opacity = "0";
     }
-  }, HIGHLIGHT_ON_MS);
+  }, HIGHLIGHT_PULSE_ON_MS);
   schedule(() => {
     if (isCurrentHighlight(generation) && activeOverlay?.root === root) {
       root.style.opacity = "1";
     }
-  }, HIGHLIGHT_ON_MS + HIGHLIGHT_OFF_MS);
+  }, HIGHLIGHT_PULSE_ON_MS + HIGHLIGHT_PULSE_OFF_MS);
   schedule(
     () => {
       if (isCurrentHighlight(generation) && activeOverlay?.root === root) {
@@ -638,7 +675,7 @@ function scheduleOverlayFlash(root: HTMLElement, generation: number): void {
         removeActiveOverlay();
       }
     },
-    HIGHLIGHT_ON_MS * 2 + HIGHLIGHT_OFF_MS,
+    HIGHLIGHT_PULSE_ON_MS * 2 + HIGHLIGHT_PULSE_OFF_MS,
   );
 }
 
@@ -687,7 +724,7 @@ export async function navigateToPdfQuote(
     fallbackPageIndex?: number;
   } = {},
 ): Promise<boolean> {
-  const quote = quoteText.trim();
+  const quote = sanitizeQuoteForNavigation(quoteText.trim());
   if (quote.length < MIN_QUOTE_SEARCH_LENGTH) {
     return false;
   }

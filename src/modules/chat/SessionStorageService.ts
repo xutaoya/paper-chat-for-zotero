@@ -756,6 +756,71 @@ export class SessionStorageService {
   }
 
   /**
+   * 更新用户消息内容与附件（编辑重发）。
+   */
+  async updateUserMessage(
+    sessionId: string,
+    message: ChatMessage,
+  ): Promise<void> {
+    await this.init();
+
+    try {
+      await getStorageDatabase().ensureInit();
+      const now = Date.now();
+      const searchProjection = projectMessageSearchTextSafe(message);
+      const preview =
+        message.content.substring(0, 50) +
+        (message.content.length > 50 ? "..." : "");
+
+      await this.runTransaction(async (db) => {
+        const rows =
+          (await db.queryAsync(
+            "SELECT id FROM messages WHERE id = ? AND session_id = ?",
+            [message.id, sessionId],
+          )) || [];
+        if (rows.length === 0) return;
+
+        await db.queryAsync(
+          `UPDATE messages SET
+            content = ?, images = ?, files = ?, quoted_messages = ?, pdf_context = ?,
+            selected_text = ?, edited_at = ?, search_text = ?, search_index_version = ?
+          WHERE id = ? AND session_id = ?`,
+          [
+            message.content || "",
+            message.images ? JSON.stringify(message.images) : null,
+            message.files ? JSON.stringify(message.files) : null,
+            serializeQuotedMessageRefs(message.quotedMessages),
+            message.pdfContext ? 1 : null,
+            message.selectedText || null,
+            message.editedAt || now,
+            searchProjection.searchText,
+            searchProjection.searchIndexVersion,
+            message.id,
+            sessionId,
+          ],
+        );
+
+        await db.queryAsync(
+          `UPDATE session_meta SET
+            last_message_preview = ?,
+            last_message_time = ?,
+            updated_at = ?
+          WHERE id = ?`,
+          [preview, message.timestamp, now, sessionId],
+        );
+        await db.queryAsync("UPDATE sessions SET updated_at = ? WHERE id = ?", [
+          now,
+          sessionId,
+        ]);
+        await incrementSearchRevision(db, now);
+      });
+    } catch (error) {
+      ztoolkit.log("[SessionStorageService] Update user message error:", error);
+      throw error;
+    }
+  }
+
+  /**
    * 仅更新 session 元数据 (不涉及 messages)
    */
   async updateSessionMeta(session: ChatSession): Promise<void> {

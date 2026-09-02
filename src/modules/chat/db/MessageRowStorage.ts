@@ -41,6 +41,7 @@ export interface MessageStorageRow {
   is_system_notice?: number | null;
   search_text?: string | null;
   search_index_version?: number | null;
+  edited_at?: number | null;
 }
 
 const MAX_STORED_EVIDENCE_JSON_CHARACTERS = 600_000;
@@ -184,6 +185,10 @@ export function mapMessageRowToChatMessage(
   if (readOptionalMessageColumn(row, "api_only")) message.apiOnly = true;
   if (readOptionalMessageColumn(row, "is_system_notice")) {
     message.isSystemNotice = true;
+  }
+  const editedAt = readOptionalMessageColumn(row, "edited_at");
+  if (editedAt) {
+    message.editedAt = editedAt;
   }
   return message;
 }

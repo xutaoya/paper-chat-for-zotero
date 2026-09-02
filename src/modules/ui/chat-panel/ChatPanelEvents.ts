@@ -66,6 +66,7 @@ import {
   type QueuedTurn,
   type TurnRunResult,
 } from "./SessionTurnQueue";
+import { UserMessageEditController } from "./UserMessageEditController";
 
 // Import getActiveReaderItem from the manager module to avoid circular dependency
 // This is set by ChatPanelManager during initialization
@@ -334,6 +335,7 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
   // document or window outlive the panel and must be removed on teardown to
   // avoid leaking them (and the DOM they close over) on every panel rebuild.
   const disposers: Array<() => void> = [];
+  const userMessageEditController = UserMessageEditController.attach(context);
 
   const openPluginPreferencesSafely = (): void => {
     Zotero.Utilities.Internal.openPreferences("paperchat-prefpane");
@@ -589,6 +591,7 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
       }
 
       syncSessionNavigationState(context, sendButton, chatManager);
+      userMessageEditController.cancelEdit({ clearComposer: true });
       const itemKey = loadedSession.lastActiveItemKey;
       if (itemKey) {
         const libraryID =
@@ -730,6 +733,16 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
   });
 
   // Input auto-resize
+  messageInput?.addEventListener("keydown", (event) => {
+    if (
+      event.key === "Escape" &&
+      userMessageEditController.getEditingUserMessageId()
+    ) {
+      event.preventDefault();
+      userMessageEditController.cancelEdit({ clearComposer: true });
+    }
+  });
+
   messageInput?.addEventListener("input", () => {
     resizeMessageInput(messageInput, chatHistory);
     syncSendButtonState(sendButton, chatManager);
@@ -774,6 +787,7 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
   newChatBtn?.addEventListener("click", async () => {
     ztoolkit.log("New chat button clicked");
     invalidateHistoryNavigation();
+    userMessageEditController.cancelEdit({ clearComposer: true });
 
     // Create a new session
     const newSession = await chatManager.createNewSession();
@@ -811,6 +825,7 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
     if (!confirmed) return;
     sessionTurnQueue.clear(session.id);
     invalidateHistoryNavigation();
+    userMessageEditController.cancelEdit({ clearComposer: true });
     await chatManager.clearCurrentSession();
     context.clearAttachments();
     context.updateAttachmentsPreview();
@@ -1198,8 +1213,6 @@ export function setupEventHandlers(context: ChatPanelContext): () => void {
       container,
       getCurrentTheme(),
     );
-    const activeSession = chatManager.getActiveSession();
-    conversationNavigator?.update(activeSession?.messages || []);
     disposers.push(() => disposeConversationNavigator(container));
   } catch (error) {
     ztoolkit.log("[ChatPanel] Conversation navigator init failed:", error);
@@ -1700,6 +1713,13 @@ async function sendMessage(
     const content = presetContent?.trim() || messageInput?.value?.trim();
     if (!content) return;
 
+    const editController = UserMessageEditController.get(context.container);
+    if (editController && !(await editController.prepareEditResend())) {
+      return;
+    }
+    const editUserMessageId =
+      editController?.consumePendingResendUserMessageId() ?? undefined;
+
     // Get active reader item first (used for PDF attachment)
     const activeReaderItem = getActiveReaderItem();
 
@@ -1768,6 +1788,8 @@ async function sendMessage(
           item: targetItem,
           attachPdf: shouldAttachPdf,
           targetSession,
+          reuseUserMessageId: editUserMessageId,
+          editExistingUserMessage: !!editUserMessageId,
           ...attachmentOptions,
         });
         return accepted;

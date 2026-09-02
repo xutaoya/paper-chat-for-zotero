@@ -154,6 +154,7 @@ type InternalSendMessageOptions = SendMessageOptions & {
   resumeFailedTurn?: boolean;
   reuseUserMessageId?: string;
   reuseAssistantMessageId?: string;
+  editExistingUserMessage?: boolean;
   targetSession?: ChatSession;
   requireTargetSessionActive?: boolean;
   allowedToolNames?: readonly string[];
@@ -1819,7 +1820,20 @@ export class ChatManager {
         selectedText: options.selectedText,
       };
 
-      if (!reusedUserMessage) {
+      if (reusedUserMessage && options.editExistingUserMessage) {
+        reusedUserMessage.content = finalContent;
+        reusedUserMessage.images = options.images;
+        reusedUserMessage.files = options.files;
+        reusedUserMessage.quotedMessages =
+          quotedMessages.length > 0 ? quotedMessages : undefined;
+        reusedUserMessage.selectedText = options.selectedText;
+        reusedUserMessage.pdfContext = pdfWasAttached;
+        reusedUserMessage.editedAt = Date.now();
+        await this.sessionStorage.updateUserMessage(
+          sendingSession.id,
+          reusedUserMessage,
+        );
+      } else if (!reusedUserMessage) {
         sendingSession.messages.push(userMessage);
         await this.sessionStorage.insertMessage(sendingSession.id, userMessage);
       }
@@ -3203,6 +3217,84 @@ export class ChatManager {
     }
 
     return true;
+  }
+
+  /**
+   * 截断指定用户消息之后的会话内容，保留该用户消息本身，用于编辑重发。
+   */
+  async truncateSessionAfterUserMessage(
+    sessionId: string,
+    userMessageId: string,
+  ): Promise<boolean> {
+    await this.init();
+
+    const session = this.getTrackedSessionById(sessionId);
+    if (!session) return false;
+
+    const userIndex = session.messages.findIndex(
+      (message) => message.id === userMessageId && message.role === "user",
+    );
+    if (userIndex < 0) return false;
+
+    const deleteStartIndex = userIndex + 1;
+    const hasStreamingTurn = session.messages
+      .slice(deleteStartIndex)
+      .some((message) => message.streamingState === "in_progress");
+
+    if (hasStreamingTurn || this.activeSessionRunIds.has(sessionId)) {
+      await this.cancelSessionTurn(sessionId);
+    }
+
+    const refreshed = this.getTrackedSessionById(sessionId);
+    if (!refreshed) return false;
+
+    const refreshedUserIndex = refreshed.messages.findIndex(
+      (message) => message.id === userMessageId && message.role === "user",
+    );
+    if (refreshedUserIndex < 0) return false;
+
+    const refreshedDeleteStartIndex = refreshedUserIndex + 1;
+    const messagesToDelete = refreshed.messages.slice(refreshedDeleteStartIndex);
+    const deletingActiveTail =
+      refreshedDeleteStartIndex < refreshed.messages.length;
+
+    if (deletingActiveTail || messagesToDelete.length > 0) {
+      getToolPermissionManager().denyPendingApprovals({
+        sessionId: refreshed.id,
+        reason:
+          "Pending tool approvals were denied because the conversation was edited.",
+      });
+      this.agentRuntime.cancelPendingUserInputRequests(refreshed.id);
+    }
+
+    for (const message of [...messagesToDelete].reverse()) {
+      await this.sessionStorage.deleteMessage(refreshed.id, message.id);
+    }
+
+    if (messagesToDelete.length > 0) {
+      refreshed.messages.splice(refreshedDeleteStartIndex);
+    }
+
+    refreshed.executionPlan = undefined;
+    refreshed.toolApprovalState = undefined;
+    refreshed.userInputRequestState = undefined;
+    if (!refreshed.toolExecutionState?.results.length) {
+      refreshed.toolExecutionState = undefined;
+    }
+    clearRetryableFailureState(refreshed);
+    refreshed.updatedAt = Date.now();
+    await this.sessionStorage.updateSessionMeta(refreshed);
+
+    if (this.isSessionActive(refreshed)) {
+      this.onExecutionPlanUpdate?.(refreshed.executionPlan);
+      this.onMessageUpdate?.(refreshed.messages);
+    }
+
+    return true;
+  }
+
+  hasActiveSessionTurn(sessionId: string): boolean {
+    return this.activeSessionRunIds.has(sessionId);
   }
 
   /**

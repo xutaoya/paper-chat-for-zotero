@@ -224,6 +224,7 @@ describe("StorageDatabase foundation", function () {
             { name: "quoted_messages" },
             { name: "source_item_keys" },
             { name: "presentation_artifacts" },
+            { name: "edited_at" },
             { name: "search_text" },
             { name: "search_index_version" },
           ];
@@ -405,20 +406,27 @@ describe("StorageDatabase foundation", function () {
 
   it("repairs a missing reasoning column even when the schema version is current", async function () {
     const recorded: string[] = [];
+    const messageColumns = new Set([
+      "id",
+      "evidence",
+      "quoted_messages",
+      "source_item_keys",
+      "presentation_artifacts",
+      "search_text",
+      "search_index_version",
+    ]);
     const fakeDb = {
       async queryAsync(sql: string) {
         const normalized = normalizeSql(sql);
         recorded.push(normalized);
+        if (normalized === "ALTER TABLE messages ADD COLUMN reasoning TEXT") {
+          messageColumns.add("reasoning");
+        }
+        if (normalized === "ALTER TABLE messages ADD COLUMN edited_at INTEGER") {
+          messageColumns.add("edited_at");
+        }
         if (normalized === "PRAGMA table_info(messages)") {
-          return [
-            { name: "id" },
-            { name: "evidence" },
-            { name: "quoted_messages" },
-            { name: "source_item_keys" },
-            { name: "presentation_artifacts" },
-            { name: "search_text" },
-            { name: "search_index_version" },
-          ];
+          return [...messageColumns].map((name) => ({ name }));
         }
         if (normalized === "PRAGMA table_info(session_meta)") {
           return [
