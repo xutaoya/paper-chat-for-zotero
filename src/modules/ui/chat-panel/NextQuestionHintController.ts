@@ -5,6 +5,7 @@ import {
 } from "../../../utils/abort";
 import { getNextQuestionHintService } from "../../chat/next-question-hint";
 import { syncComposerHintOffset } from "./ContextItemBanner";
+import { dispatchInputEvent } from "./ChatPanelBuilder";
 import type { ChatMessage } from "../../../types/chat";
 import type {
   NextQuestionHint,
@@ -338,7 +339,7 @@ export class NextQuestionHintController {
     this.input.value = accepted.text;
     this.input.focus();
     this.input.setSelectionRange(accepted.text.length, accepted.text.length);
-    this.input.dispatchEvent(new Event("input", { bubbles: true }));
+    dispatchInputEvent(this.input);
   }
 
   private dismissHint(options: { markDismissed?: boolean } = {}): void {

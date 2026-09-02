@@ -29,6 +29,24 @@ export function createElement(
   return el;
 }
 
+/** Dispatch a bubbling `input` event in Zotero's chrome document (no global Event). */
+export function dispatchInputEvent(target: HTMLElement): void {
+  const doc = target.ownerDocument;
+  const view = (doc.defaultView ?? Zotero.getMainWindow()) as Window | null;
+  const EventCtor = view?.Event;
+  if (EventCtor) {
+    target.dispatchEvent(new EventCtor("input", { bubbles: true }));
+    return;
+  }
+  try {
+    const event = doc.createEvent("HTMLEvents");
+    event.initEvent("input", true, false);
+    target.dispatchEvent(event);
+  } catch {
+    // No compatible event constructor; callers may resize manually if needed.
+  }
+}
+
 export function createChatEmptyStateIcon(doc: Document): HTMLElement {
   return createElement(
     doc,
@@ -754,6 +772,56 @@ export function createChatContainer(
 
   const contextItemBanner = createContextItemBanner(doc, theme);
   inputWrapper.appendChild(contextItemBanner);
+
+  const editMessageBanner = createElement(
+    doc,
+    "div",
+    {
+      display: "none",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "8px",
+      padding: "8px 16px 0",
+      fontSize: "12px",
+      lineHeight: "1.4",
+      color: theme.textSecondary,
+      flexShrink: "0",
+      position: "relative",
+      zIndex: "1",
+    },
+    { id: "chat-edit-message-banner" },
+  );
+  const editMessageBannerText = createElement(
+    doc,
+    "span",
+    {
+      flex: "1",
+      minWidth: "0",
+    },
+    { id: "chat-edit-message-banner-text" },
+  );
+  editMessageBanner.appendChild(editMessageBannerText);
+  const editMessageCancelBtn = createElement(
+    doc,
+    "button",
+    {
+      flex: "0 0 auto",
+      border: "none",
+      background: "transparent",
+      color: theme.textMuted,
+      cursor: "pointer",
+      fontSize: "12px",
+      padding: "0",
+    },
+    {
+      id: "chat-edit-message-cancel",
+      type: "button",
+      "aria-label": getString("chat-edit-message-cancel"),
+    },
+  );
+  editMessageCancelBtn.textContent = getString("chat-edit-message-cancel");
+  editMessageBanner.appendChild(editMessageCancelBtn);
+  inputWrapper.appendChild(editMessageBanner);
 
   const messageInput = createElement(
     doc,

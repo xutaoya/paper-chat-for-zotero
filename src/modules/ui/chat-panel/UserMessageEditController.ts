@@ -4,7 +4,7 @@ import {
   extractEditableUserMessageContent,
 } from "../../chat/user-message-edit";
 import { getString } from "../../../utils/locale";
-import { createElement } from "./ChatPanelBuilder";
+import { dispatchInputEvent } from "./ChatPanelBuilder";
 import { sessionTurnQueue } from "./SessionTurnQueue";
 import type { AttachmentState, ChatPanelContext } from "./types";
 
@@ -34,6 +34,7 @@ export class UserMessageEditController {
     if (!controller) {
       controller = new UserMessageEditController(context);
       controllers.set(context.container, controller);
+      controller.bindCancelButton();
     }
     return controller;
   }
@@ -98,12 +99,15 @@ export class UserMessageEditController {
     this.editingUserMessageId = message.id;
     if (messageInput) {
       messageInput.value = extractEditableUserMessageContent(message);
-      messageInput.dispatchEvent(new Event("input", { bubbles: true }));
     }
     this.context.setAttachmentState(attachmentStateFromUserMessage(message));
     this.context.updateAttachmentsPreview();
     this.syncComposerUi();
+    if (messageInput) {
+      dispatchInputEvent(messageInput);
+    }
     this.context.renderMessages(session.messages);
+    this.syncComposerUi();
     messageInput?.focus();
     return true;
   }
@@ -128,6 +132,7 @@ export class UserMessageEditController {
     const session = this.context.chatManager.getActiveSession();
     if (session) {
       this.context.renderMessages(session.messages);
+      this.syncComposerUi();
     }
   }
 
@@ -159,85 +164,39 @@ export class UserMessageEditController {
     return true;
   }
 
+  private bindCancelButton(): void {
+    const cancelButton = this.context.container.querySelector(
+      "#chat-edit-message-cancel",
+    ) as HTMLButtonElement | null;
+    if (!cancelButton || cancelButton.dataset.bound === "true") {
+      return;
+    }
+    cancelButton.dataset.bound = "true";
+    cancelButton.addEventListener("click", () => {
+      this.cancelEdit({ clearComposer: true });
+    });
+  }
+
   private syncComposerUi(): void {
     const container = this.context.container;
     const inputWrapper = container.querySelector(
       "#chat-input-wrapper",
     ) as HTMLElement | null;
-    const banner = this.ensureEditBanner();
+    const banner = container.querySelector(
+      "#chat-edit-message-banner",
+    ) as HTMLElement | null;
+    const bannerText = container.querySelector(
+      "#chat-edit-message-banner-text",
+    ) as HTMLElement | null;
     const editing = this.editingUserMessageId !== null;
 
     inputWrapper?.classList.toggle("chat-composer--editing", editing);
+    if (!banner) {
+      return;
+    }
     banner.style.display = editing ? "flex" : "none";
-    if (editing) {
-      const label = banner.querySelector("span");
-      if (label) {
-        label.textContent = getString("chat-edit-message-banner");
-      }
+    if (editing && bannerText) {
+      bannerText.textContent = getString("chat-edit-message-banner");
     }
-  }
-
-  private ensureEditBanner(): HTMLElement {
-    const container = this.context.container;
-    const existing = container.querySelector(
-      "#chat-edit-message-banner",
-    ) as HTMLElement | null;
-    if (existing) {
-      return existing;
-    }
-
-    const inputWrapper = container.querySelector(
-      "#chat-input-wrapper",
-    ) as HTMLElement | null;
-    const theme = this.context.getTheme();
-    const banner = createElement(
-      container.ownerDocument!,
-      "div",
-      {
-        display: "none",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: "8px",
-        padding: "8px 16px 0",
-        fontSize: "12px",
-        lineHeight: "1.4",
-        color: theme.textSecondary,
-      },
-      { id: "chat-edit-message-banner" },
-    );
-    const label = createElement(container.ownerDocument!, "span", {
-      flex: "1",
-      minWidth: "0",
-    });
-    banner.appendChild(label);
-
-    const cancelButton = createElement(
-      container.ownerDocument!,
-      "button",
-      {
-        flex: "0 0 auto",
-        border: "none",
-        background: "transparent",
-        color: theme.textMuted,
-        cursor: "pointer",
-        fontSize: "12px",
-        padding: "0",
-      },
-      {
-        type: "button",
-        "aria-label": getString("chat-edit-message-cancel"),
-      },
-    );
-    cancelButton.textContent = getString("chat-edit-message-cancel");
-    cancelButton.addEventListener("click", () => {
-      this.cancelEdit({ clearComposer: true });
-    });
-    banner.appendChild(cancelButton);
-    inputWrapper?.insertBefore(
-      banner,
-      inputWrapper.querySelector("#chat-context-item-banner")?.nextSibling ||
-        inputWrapper.querySelector("#chat-message-input"),
-    );
-    return banner;
   }
 }

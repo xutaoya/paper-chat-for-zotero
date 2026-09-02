@@ -158,7 +158,7 @@ paperchat-chat-delete = 删除
 
 paperchat-chat-edit-title = 编辑标题
 
-paperchat-chat-edit-message-banner = 正在编辑消息，发送后将更新此条并替换后续对话
+paperchat-chat-edit-message-banner = 发送后将更新此条并替换后续对话
 
 paperchat-chat-edit-message-cancel = 取消
 

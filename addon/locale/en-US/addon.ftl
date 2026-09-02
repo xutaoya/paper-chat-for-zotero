@@ -158,7 +158,7 @@ paperchat-chat-delete = Delete
 
 paperchat-chat-edit-title = Edit title
 
-paperchat-chat-edit-message-banner = Editing message. Sending will update it and replace later turns.
+paperchat-chat-edit-message-banner = Sending will update this message and replace later turns.
 
 paperchat-chat-edit-message-cancel = Cancel
 
