@@ -1,7 +1,9 @@
 import { assert } from "chai";
 import {
+  measureTextOverflow,
   parseSearchQueryFromEntry,
   parseSearchSources,
+  resolveTooltipMaxWidth,
 } from "../src/modules/ui/chat-panel/SearchActivityElement.ts";
 import type { ParsedToolCallEntry } from "../src/modules/ui/chat-panel/MarkdownRenderer.ts";
 
@@ -81,5 +83,39 @@ describe("search activity element", function () {
       toolArgs: JSON.stringify({ query: longQuery, source: "web" }),
     };
     assert.equal(parseSearchQueryFromEntry(entry), longQuery);
+  });
+
+  it("prefers the longest non-truncated query candidate", function () {
+    const fullQuery =
+      "SFMFusion Spatial-Frequency Enhanced Mamba github repository";
+    const entry: ParsedToolCallEntry = {
+      status: "completed",
+      toolName: "web_search",
+      statusText: "Done",
+      toolArgs: `query="${fullQuery.slice(0, 24)}..."`,
+      toolResult: `query: ${fullQuery}\nsources:\n- GitHub — https://github.com`,
+    };
+    assert.equal(parseSearchQueryFromEntry(entry), fullQuery);
+  });
+
+  it("caps tooltip width to the viewport", function () {
+    const win = { innerWidth: 320 } as Window;
+    assert.equal(resolveTooltipMaxWidth(win), 304);
+    assert.equal(resolveTooltipMaxWidth({ innerWidth: 1200 } as Window), 420);
+  });
+
+  it("falls back to text length when layout metrics are unavailable", function () {
+    const el = {
+      clientWidth: 180,
+      scrollWidth: 180,
+      scrollHeight: 40,
+      ownerDocument: {
+        defaultView: null,
+        documentElement: null,
+        body: null,
+      },
+    } as unknown as HTMLElement;
+    assert.isFalse(measureTextOverflow(el, "short query"));
+    assert.isTrue(measureTextOverflow(el, "x".repeat(60)));
   });
 });

@@ -1023,8 +1023,8 @@
 }
 
 .paperchat-fixed-tooltip {
-  position: absolute;
-  z-index: 10030;
+  position: fixed;
+  z-index: 2147483647;
   display: none;
   width: max-content;
   max-width: 420px;

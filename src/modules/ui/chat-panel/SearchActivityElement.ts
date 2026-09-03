@@ -44,8 +44,96 @@ function scheduleAfterLayout(doc: Document, callback: () => void): void {
   setTimeout(callback, 0);
 }
 
-function isTextTruncated(el: HTMLElement): boolean {
-  return el.scrollWidth > el.clientWidth + 1;
+function isTextTruncated(el: HTMLElement, fullText?: string): boolean {
+  if (el.clientWidth <= 0) {
+    return false;
+  }
+  if (
+    el.scrollWidth > el.clientWidth + 1 ||
+    el.scrollHeight > el.clientHeight + 1
+  ) {
+    return true;
+  }
+  const text = (fullText ?? el.textContent ?? "").trim();
+  if (!text) {
+    return false;
+  }
+  return measureTextOverflow(el, text);
+}
+
+export function measureTextOverflow(
+  el: HTMLElement,
+  text: string,
+): boolean {
+  const doc = el.ownerDocument;
+  const win = doc.defaultView;
+  if (!win) {
+    return text.length > 48;
+  }
+
+  const style = win.getComputedStyle(el);
+  if (!style) {
+    return text.length > 48;
+  }
+
+  const mount = (doc.documentElement ?? doc.body) as HTMLElement | null;
+  if (!mount) {
+    return text.length > 48;
+  }
+
+  const probe = doc.createElementNS(HTML_NS, "span") as HTMLElement;
+  probe.textContent = text;
+  Object.assign(probe.style, {
+    position: "absolute",
+    visibility: "hidden",
+    pointerEvents: "none",
+    whiteSpace: "nowrap",
+    font: style.font,
+    letterSpacing: style.letterSpacing,
+    wordSpacing: style.wordSpacing,
+  });
+  mount.appendChild(probe);
+  const singleLineWidth = probe.offsetWidth;
+  mount.removeChild(probe);
+
+  if (singleLineWidth > el.clientWidth + 1) {
+    return true;
+  }
+
+  const lineClampValue = Number.parseInt(style.webkitLineClamp || "", 10);
+  if (!Number.isFinite(lineClampValue) || lineClampValue <= 0) {
+    return false;
+  }
+
+  const multiProbe = doc.createElementNS(HTML_NS, "span") as HTMLElement;
+  multiProbe.textContent = text;
+  Object.assign(multiProbe.style, {
+    position: "absolute",
+    visibility: "hidden",
+    pointerEvents: "none",
+    display: "block",
+    width: `${el.clientWidth}px`,
+    font: style.font,
+    lineHeight: style.lineHeight,
+    wordBreak: style.wordBreak,
+    whiteSpace: "normal",
+  });
+  mount.appendChild(multiProbe);
+  const lineHeight =
+    Number.parseFloat(style.lineHeight) ||
+    Number.parseFloat(style.fontSize) * 1.45;
+  const overflows = multiProbe.offsetHeight > lineHeight * lineClampValue + 1;
+  mount.removeChild(multiProbe);
+  return overflows;
+}
+
+export function resolveTooltipMaxWidth(win: Window, margin = 8): number {
+  const viewportWidth =
+    win.innerWidth ||
+    win.document.documentElement.clientWidth ||
+    win.document.body?.clientWidth ||
+    420;
+  return Math.min(420, Math.max(160, viewportWidth - margin * 2));
 }
 
 type TooltipContext = {
@@ -63,8 +151,8 @@ const tooltipStateByMount = new WeakMap<HTMLElement, TooltipMountState>();
 let activeTooltipContext: TooltipContext | null = null;
 
 const TOOLTIP_STYLES: Record<string, string> = {
-  position: "absolute",
-  zIndex: "10030",
+  position: "fixed",
+  zIndex: "2147483647",
   display: "none",
   width: "max-content",
   maxWidth: "420px",
@@ -86,36 +174,8 @@ const TOOLTIP_STYLES: Record<string, string> = {
 function resolveTooltipContext(anchor: HTMLElement): TooltipContext {
   const doc = anchor.ownerDocument;
   const win = (doc.defaultView ?? Zotero.getMainWindow()) as Window;
-
-  const chatContainer = anchor.closest(
-    "[id$='-chat-container']",
-  ) as HTMLElement | null;
-  if (chatContainer) {
-    return { doc, mount: chatContainer, win };
-  }
-
-  const chatViewport = anchor.closest(
-    "#chat-viewport",
-  ) as HTMLElement | null;
-  if (chatViewport) {
-    return { doc, mount: chatViewport, win };
-  }
-
-  const localMount = (doc.body ?? doc.documentElement) as HTMLElement | null;
-  if (localMount) {
-    return { doc, mount: localMount, win };
-  }
-
-  const mainWin = Zotero.getMainWindow();
-  const mainDoc = mainWin?.document;
-  const mainMount = (mainDoc?.body ?? mainDoc?.documentElement) as
-    | HTMLElement
-    | null;
-  if (mainMount && mainDoc) {
-    return { doc: mainDoc, mount: mainMount, win: mainWin };
-  }
-
-  return { doc, mount: anchor, win };
+  const mount = (doc.documentElement ?? doc.body) as HTMLElement;
+  return { doc, mount, win };
 }
 
 function getTooltipEl(ctx: TooltipContext): HTMLElement {
@@ -135,29 +195,29 @@ function getTooltipEl(ctx: TooltipContext): HTMLElement {
 function positionTooltip(
   tip: HTMLElement,
   anchor: HTMLElement,
-  mount: HTMLElement,
+  win: Window,
 ): void {
-  const mountRect = mount.getBoundingClientRect();
   const anchorRect = anchor.getBoundingClientRect();
   const margin = 8;
   const gap = 6;
 
   tip.style.display = "block";
   tip.style.visibility = "hidden";
+  tip.style.maxWidth = `${resolveTooltipMaxWidth(win, margin)}px`;
   tip.style.left = "0";
   tip.style.top = "0";
 
   const tipRect = tip.getBoundingClientRect();
-  let left = anchorRect.left - mountRect.left;
-  let top = anchorRect.top - mountRect.top - tipRect.height - gap;
+  let left = anchorRect.left;
+  let top = anchorRect.top - tipRect.height - gap;
 
   if (top < margin) {
-    top = anchorRect.bottom - mountRect.top + gap;
+    top = anchorRect.bottom + gap;
   }
 
-  const maxLeft = Math.max(margin, mount.clientWidth - tipRect.width - margin);
+  const maxLeft = Math.max(margin, win.innerWidth - tipRect.width - margin);
   left = Math.min(Math.max(left, margin), maxLeft);
-  const maxTop = Math.max(margin, mount.clientHeight - tipRect.height - margin);
+  const maxTop = Math.max(margin, win.innerHeight - tipRect.height - margin);
   top = Math.min(Math.max(top, margin), maxTop);
 
   tip.style.left = `${left}px`;
@@ -199,16 +259,24 @@ function showFixedTooltip(anchor: HTMLElement, text: string): void {
     return;
   }
 
-  tip.textContent = text;
-  positionTooltip(tip, anchor, ctx.mount);
-  scheduleAfterLayout(ctx.doc, () => {
-    if (activeTooltipContext?.mount === ctx.mount && tip.style.display !== "none") {
-      positionTooltip(tip, anchor, ctx.mount);
-    }
-  });
+  if (state.scrollHide) {
+    ctx.doc.removeEventListener("scroll", state.scrollHide, true);
+    state.scrollHide = null;
+  }
 
-  state.scrollHide = () => hideFixedTooltip(ctx);
-  ctx.doc.addEventListener("scroll", state.scrollHide, true);
+  tip.textContent = text;
+  positionTooltip(tip, anchor, ctx.win);
+  scheduleAfterLayout(ctx.doc, () => {
+    if (activeTooltipContext?.mount !== ctx.mount || tip.style.display === "none") {
+      return;
+    }
+    positionTooltip(tip, anchor, ctx.win);
+    if (state.scrollHide) {
+      return;
+    }
+    state.scrollHide = () => hideFixedTooltip(ctx);
+    ctx.doc.addEventListener("scroll", state.scrollHide, true);
+  });
 }
 
 function bindTruncationTooltip(
@@ -220,30 +288,15 @@ function bindTruncationTooltip(
     return;
   }
 
-  const doc = host.ownerDocument;
-  let truncated = false;
+  host.style.cursor = "help";
 
-  const syncTruncated = () => {
-    if (!measureEl.isConnected) {
-      return;
-    }
-    truncated = isTextTruncated(measureEl);
-  };
-
-  syncTruncated();
-  scheduleAfterLayout(doc, syncTruncated);
-
-  if (typeof ResizeObserver !== "undefined") {
-    const observer = new ResizeObserver(() => syncTruncated());
-    observer.observe(measureEl);
-  }
-
-  host.addEventListener("mouseenter", () => {
-    syncTruncated();
-    if (truncated) {
+  const show = () => {
+    if (isTextTruncated(measureEl, fullText) || fullText.length > 28) {
       showFixedTooltip(host, fullText);
     }
-  });
+  };
+
+  host.addEventListener("mouseenter", show);
   host.addEventListener("mouseleave", () => hideFixedTooltip());
 }
 
@@ -372,34 +425,53 @@ function parseQueryFromRawArgs(args: string): string | null {
   return null;
 }
 
+function looksTruncatedQuery(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.endsWith("...") || trimmed.endsWith("…");
+}
+
+function pickLongestSearchQuery(candidates: string[]): string {
+  if (candidates.length === 0) {
+    return "";
+  }
+  const nonTruncated = candidates.filter(
+    (candidate) => !looksTruncatedQuery(candidate),
+  );
+  const pool = nonTruncated.length > 0 ? nonTruncated : candidates;
+  return pool.reduce((longest, current) =>
+    current.length > longest.length ? current : longest,
+  );
+}
+
 export function parseSearchQueryFromEntry(entry: ParsedToolCallEntry): string {
   const result = entry.toolResult || "";
+  const candidates: string[] = [];
 
   const hostedQuery = result.match(/^query:\s*(.+)$/m);
   if (hostedQuery?.[1]) {
-    return hostedQuery[1].trim();
+    candidates.push(hostedQuery[1].trim());
   }
 
   const webSearchMatch = result.match(
     /(?:Web|Scholarly) search results for "([^"]+)"/i,
   );
   if (webSearchMatch?.[1]) {
-    return webSearchMatch[1].trim();
+    candidates.push(webSearchMatch[1].trim());
   }
 
   if (entry.toolArgs) {
     const fromRawArgs = parseQueryFromRawArgs(entry.toolArgs);
     if (fromRawArgs) {
-      return fromRawArgs;
+      candidates.push(fromRawArgs);
     }
 
     const fromArgs = parseQueryFromToolArgsDisplay(entry.toolArgs);
     if (fromArgs) {
-      return fromArgs;
+      candidates.push(fromArgs);
     }
   }
 
-  return "";
+  return pickLongestSearchQuery(candidates);
 }
 
 export function parseSearchSources(toolResult?: string): SearchSourcePreview[] {
@@ -639,8 +711,10 @@ export function createSearchActivityElement(
       lineHeight: "1.45",
       color: theme.textSecondary,
       overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap",
+      display: "-webkit-box",
+      WebkitLineClamp: "2",
+      WebkitBoxOrient: "vertical",
+      wordBreak: "break-word",
     });
     queryEl.className = "paperchat-search-query-text";
     queryEl.textContent = query;
