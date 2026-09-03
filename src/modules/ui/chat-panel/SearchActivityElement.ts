@@ -1,4 +1,5 @@
 import type { ParsedToolCallEntry } from "./MarkdownRenderer";
+import { getAgentUiSemanticColors } from "./AgentUiTheme";
 import { getString } from "../../../utils/locale";
 import { HTML_NS } from "./types";
 import type { ThemeColors } from "./types";
@@ -535,6 +536,7 @@ function createSearchSourceRow(
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   });
+  title.className = "paperchat-search-source-title";
   title.textContent = source.title;
   titleHost.appendChild(title);
   bindTruncationTooltip(titleHost, title, source.title);
@@ -553,6 +555,7 @@ function createSearchSourceRow(
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   });
+  domain.className = "paperchat-search-source-domain";
   domain.textContent = source.domain;
   domainHost.appendChild(domain);
   bindTruncationTooltip(domainHost, domain, source.url || source.domain);
@@ -639,6 +642,7 @@ export function createSearchActivityElement(
       textOverflow: "ellipsis",
       whiteSpace: "nowrap",
     });
+    queryEl.className = "paperchat-search-query-text";
     queryEl.textContent = query;
     bindTruncationTooltip(queryRow, queryEl, query);
     queryRow.appendChild(icon);
@@ -662,7 +666,7 @@ export function createSearchActivityElement(
   if (isError) {
     const errorEl = createElement(doc, "span", {
       fontSize: "11px",
-      color: "#dc2626",
+      color: getAgentUiSemanticColors().error,
     });
     errorEl.setAttribute("data-agent-tool-status-text", "true");
     errorEl.textContent = entry.statusText;

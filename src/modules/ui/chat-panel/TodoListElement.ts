@@ -4,6 +4,7 @@ import type {
   ExecutionPlanStepStatus,
 } from "../../../types/chat";
 import { getString } from "../../../utils/locale";
+import { getAgentUiSemanticColors } from "./AgentUiTheme";
 import { HTML_NS } from "./types";
 import type { ThemeColors } from "./types";
 
@@ -149,7 +150,7 @@ function createStatusIcon(
 
   svg.style.color =
     status === "cancelled"
-      ? "#e11d48"
+      ? getAgentUiSemanticColors().cancelled
       : status === "in-progress"
         ? theme.textPrimary
         : theme.textMuted;
@@ -157,7 +158,12 @@ function createStatusIcon(
   return svg;
 }
 
-function createHeaderIcon(doc: Document, allComplete: boolean): HTMLElement {
+function createHeaderIcon(
+  doc: Document,
+  theme: ThemeColors,
+  allComplete: boolean,
+): HTMLElement {
+  const semantic = getAgentUiSemanticColors();
   const wrap = createElement(doc, "span", {
     width: "24px",
     height: "24px",
@@ -170,7 +176,7 @@ function createHeaderIcon(doc: Document, allComplete: boolean): HTMLElement {
   });
   wrap.className = "paperchat-todo-header-icon";
   wrap.textContent = allComplete ? "✓" : "☰";
-  wrap.style.color = allComplete ? "#16a34a" : "";
+  wrap.style.color = allComplete ? semantic.success : theme.textMuted;
   return wrap;
 }
 
@@ -346,16 +352,20 @@ function syncTodoListContent(
     ".paperchat-todo-list-count",
   ) as HTMLElement | null;
   if (countEl) {
+    const semantic = getAgentUiSemanticColors();
     countEl.textContent = `${completed}/${items.length}`;
-    countEl.style.color = allComplete ? "#16a34a" : "";
+    countEl.style.color = allComplete ? semantic.success : theme.textMuted;
+    countEl.setAttribute("data-complete", allComplete ? "true" : "false");
   }
 
   const headerIcon = root.querySelector(
     ".paperchat-todo-header-icon",
   ) as HTMLElement | null;
   if (headerIcon) {
+    const semantic = getAgentUiSemanticColors();
     headerIcon.textContent = allComplete ? "✓" : "☰";
-    headerIcon.style.color = allComplete ? "#16a34a" : "";
+    headerIcon.style.color = allComplete ? semantic.success : theme.textMuted;
+    headerIcon.setAttribute("data-complete", allComplete ? "true" : "false");
   }
 
   const list = root.querySelector(
@@ -439,7 +449,11 @@ export function createTodoListElement(
     },
   );
 
-  trigger.appendChild(createHeaderIcon(doc, allComplete));
+  trigger.appendChild(createHeaderIcon(doc, theme, allComplete));
+  const headerIconEl = trigger.querySelector(
+    ".paperchat-todo-header-icon",
+  ) as HTMLElement | null;
+  headerIconEl?.setAttribute("data-complete", allComplete ? "true" : "false");
 
   const title = createElement(doc, "span", {
     flex: "1",
@@ -457,15 +471,17 @@ export function createTodoListElement(
   title.textContent = resolvePlanTitle(plan);
   trigger.appendChild(title);
 
+  const semantic = getAgentUiSemanticColors();
   const count = createElement(doc, "span", {
     flexShrink: "0",
     fontSize: "12px",
     fontWeight: "600",
     lineHeight: "1.2",
     fontVariantNumeric: "tabular-nums",
-    color: allComplete ? "#16a34a" : theme.textMuted,
+    color: allComplete ? semantic.success : theme.textMuted,
   });
   count.className = "paperchat-todo-list-count";
+  count.setAttribute("data-complete", allComplete ? "true" : "false");
   count.textContent = `${completed}/${items.length}`;
   trigger.appendChild(count);
 

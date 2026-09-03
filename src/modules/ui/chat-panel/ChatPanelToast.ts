@@ -1,4 +1,5 @@
-import { chatColors } from "../../../utils/colors";
+import { resolveFeedbackBubbleColors } from "../../../utils/colors";
+import { isDarkMode } from "./ChatPanelTheme";
 
 const TOAST_AUTO_DISMISS_MS = 3200;
 const TOAST_VIEWPORT_PADDING_PX = 8;
@@ -78,20 +79,15 @@ export function showChatPanelToast(
   viewport.querySelector(".chat-panel-toast")?.remove();
 
   const isError = kind === "error";
+  const feedbackColors = resolveFeedbackBubbleColors(kind, isDarkMode());
   const toast = doc.createElement("div");
   toast.className = `chat-panel-toast chat-panel-toast-${kind}`;
   toast.setAttribute("role", "status");
   toast.setAttribute("aria-live", "polite");
   toast.textContent = `${isError ? "⚠️" : "✓"} ${message}`;
-  toast.style.background = isError
-    ? chatColors.errorBubbleBg
-    : chatColors.successBubbleBg;
-  toast.style.border = `1px solid ${
-    isError ? chatColors.errorBubbleBorder : chatColors.successBubbleBorder
-  }`;
-  toast.style.color = isError
-    ? chatColors.errorBubbleText
-    : chatColors.successBubbleText;
+  toast.style.background = feedbackColors.background;
+  toast.style.border = `1px solid ${feedbackColors.border}`;
+  toast.style.color = feedbackColors.color;
 
   viewport.appendChild(toast);
   positionChatPanelToast(toast, viewport, options.anchor);

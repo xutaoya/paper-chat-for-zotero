@@ -1863,7 +1863,6 @@ function closeFloatingWindow(): void {
 function showSidebarPanel(): boolean {
   const doc = Zotero.getMainWindow().document;
   const win = Zotero.getMainWindow();
-  const manager = getChatManager();
 
   removeStaleSidebarContainers(doc);
 
@@ -1891,23 +1890,12 @@ function showSidebarPanel(): boolean {
   // Add theme change listener
   if (!themeCleanup) {
     themeCleanup = setupThemeListener(() => {
+      updateCurrentTheme();
       if (chatContainer) {
-        applyThemeToContainer(chatContainer);
-        const session = manager.getActiveSession();
-        if (session) {
-          createContext(chatContainer).renderExecutionPlan(
-            session.executionPlan,
-          );
-        }
+        reapplyChatContainerTheme(chatContainer);
       }
       if (floatingContainer) {
-        applyThemeToContainer(floatingContainer);
-        const session = manager.getActiveSession();
-        if (session) {
-          createContext(floatingContainer).renderExecutionPlan(
-            session.executionPlan,
-          );
-        }
+        reapplyChatContainerTheme(floatingContainer);
       }
     });
 
@@ -1917,22 +1905,10 @@ function showSidebarPanel(): boolean {
     const reapplyTheme = () => {
       updateCurrentTheme();
       if (chatContainer) {
-        applyThemeToContainer(chatContainer);
-        const session = manager.getActiveSession();
-        if (session) {
-          createContext(chatContainer).renderExecutionPlan(
-            session.executionPlan,
-          );
-        }
+        reapplyChatContainerTheme(chatContainer);
       }
       if (floatingContainer) {
-        applyThemeToContainer(floatingContainer);
-        const session = manager.getActiveSession();
-        if (session) {
-          createContext(floatingContainer).renderExecutionPlan(
-            session.executionPlan,
-          );
-        }
+        reapplyChatContainerTheme(floatingContainer);
       }
     };
     // 立即检测一次
@@ -2785,6 +2761,32 @@ async function continueInNewChatFromMessage(
     );
     throw error;
   }
+}
+
+function reapplyChatContainerTheme(container: HTMLElement): void {
+  applyThemeToContainer(container);
+  const manager = getChatManager();
+  const session = manager.getActiveSession();
+  if (!session) {
+    return;
+  }
+
+  const context = createContext(container);
+  context.renderExecutionPlan(session.executionPlan);
+
+  const chatHistory = container.querySelector(
+    "#chat-history",
+  ) as HTMLElement | null;
+  const prevScrollTop = chatHistory?.scrollTop ?? 0;
+  const wasNearBottom = chatHistory
+    ? shouldAutoScrollChatHistory(chatHistory)
+    : true;
+
+  context.renderMessages(session.messages, () => {
+    if (chatHistory && !wasNearBottom) {
+      chatHistory.scrollTop = prevScrollTop;
+    }
+  });
 }
 
 function createContext(container: HTMLElement): ChatPanelContext {

@@ -2,6 +2,11 @@ import type { ToolApprovalState } from "../../../types/chat";
 import type { ToolApprovalResolution } from "../../../types/tool";
 import { getString } from "../../../utils/locale";
 import { formatToolDisplayLabel } from "./MarkdownRenderer";
+import {
+  getAgentBadgeColors,
+  getAgentUiSemanticColors,
+  type AgentBadgeTone,
+} from "./AgentUiTheme";
 import { HTML_NS } from "./types";
 import type { ThemeColors } from "./types";
 
@@ -91,6 +96,7 @@ function createMetaRow(
     fontSize: "11px",
     lineHeight: "1.35",
   });
+  labelEl.className = "paperchat-approval-card-meta-label";
   labelEl.textContent = label;
   const valueEl = createElement(doc, "span", {
     color: theme.textPrimary,
@@ -100,6 +106,7 @@ function createMetaRow(
     wordBreak: "break-word",
     opacity: "0.88",
   });
+  valueEl.className = "paperchat-approval-card-meta-value";
   valueEl.textContent = value;
   row.appendChild(labelEl);
   row.appendChild(valueEl);
@@ -109,26 +116,9 @@ function createMetaRow(
 function createStatusBadge(
   doc: Document,
   label: string,
-  tone: "pending" | "success" | "error",
+  tone: AgentBadgeTone,
 ): HTMLElement {
-  const colors =
-    tone === "success"
-      ? {
-          color: "#15803d",
-          border: "rgba(34, 197, 94, 0.3)",
-          background: "rgba(34, 197, 94, 0.1)",
-        }
-      : tone === "error"
-        ? {
-            color: "#b91c1c",
-            border: "rgba(239, 68, 68, 0.3)",
-            background: "rgba(239, 68, 68, 0.1)",
-          }
-        : {
-            color: "#b45309",
-            border: "rgba(245, 158, 11, 0.3)",
-            background: "rgba(245, 158, 11, 0.1)",
-          };
+  const colors = getAgentBadgeColors(tone);
 
   const badge = createElement(doc, "span", {
     display: "inline-flex",
@@ -145,6 +135,8 @@ function createStatusBadge(
     whiteSpace: "nowrap",
     flexShrink: "0",
   });
+  badge.className = "paperchat-approval-status-badge";
+  badge.setAttribute("data-badge-tone", tone);
   badge.textContent = label;
   return badge;
 }
@@ -279,7 +271,11 @@ export function createToolApprovalCardElement(
   const request = banner.approvalRequest;
   const isPending = banner.kind === "waiting_approval" && Boolean(request);
   const isResolved = banner.kind === "approval_resolved";
-  const wasAllowed = isResolved && banner.accentColor === "#15803d";
+  const semantic = getAgentUiSemanticColors();
+  const wasAllowed =
+    isResolved &&
+    (banner.accentColor === semantic.successStrong ||
+      banner.accentColor === "#15803d");
 
   const card = createElement(
     doc,
@@ -298,6 +294,11 @@ export function createToolApprovalCardElement(
     {
       class: "paperchat-approval-card",
       "data-approval-card-kind": banner.kind,
+      "data-approval-verdict": isResolved
+        ? wasAllowed
+          ? "allowed"
+          : "denied"
+        : "pending",
     },
   );
 
@@ -319,11 +320,12 @@ export function createToolApprovalCardElement(
     lineHeight: "1",
     color: isResolved
       ? wasAllowed
-        ? "#15803d"
-        : "#b91c1c"
+        ? semantic.successStrong
+        : semantic.errorStrong
       : theme.textMuted,
     marginTop: "1px",
   });
+  icon.className = "paperchat-approval-card-icon";
   icon.textContent = isResolved ? (wasAllowed ? "✓" : "×") : "◫";
   headerRow.appendChild(icon);
 
@@ -400,6 +402,7 @@ export function createToolApprovalCardElement(
       paddingTop: "8px",
       borderTop: `1px solid ${theme.borderColor}`,
     });
+    meta.className = "paperchat-approval-card-meta";
     meta.appendChild(
       createMetaRow(
         doc,

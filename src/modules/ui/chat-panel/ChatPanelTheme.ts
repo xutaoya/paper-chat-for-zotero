@@ -6,6 +6,9 @@ import type { ThemeColors } from "./types";
 import { updateHistoryDropdownSearchTheme } from "./HistoryDropdown";
 import { updateConversationNavigatorTheme } from "./ConversationNavigator";
 import { applyContextItemBannerTheme } from "./ContextItemBanner";
+import { applyAgentUiTheme } from "./AgentUiTheme";
+import { applyComposerChromeTheme } from "./ComposerTheme";
+import { applyToolResultTheme } from "./ToolResultElement";
 
 // Light theme colors
 export const lightTheme: ThemeColors = {
@@ -109,6 +112,9 @@ export function updateCurrentTheme(): ThemeColors {
  */
 export function applyThemeToContainer(container: HTMLElement): void {
   const theme = currentTheme;
+  const isDark = theme === darkTheme;
+  container.classList.add("chat-container");
+  container.dataset.theme = isDark ? "dark" : "light";
 
   // Main container
   container.style.backgroundColor = theme.containerBg;
@@ -357,7 +363,6 @@ export function applyThemeToContainer(container: HTMLElement): void {
   }
 
   // User bar buttons (action btn + settings btn) - adapt to light/dark bg
-  const isDark = theme === darkTheme;
   const btnBg = isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.06)";
   const btnBorder = isDark ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.1)";
 
@@ -464,6 +469,13 @@ export function applyThemeToContainer(container: HTMLElement): void {
     .forEach((image: Element) => {
       (image as HTMLElement).style.background = theme.buttonBg;
     });
+
+  container.querySelectorAll(".paperchat-tool-result").forEach((node) => {
+    applyToolResultTheme(node as HTMLElement, theme);
+  });
+
+  applyAgentUiTheme(container, theme);
+  applyComposerChromeTheme(container, theme);
 }
 
 /**

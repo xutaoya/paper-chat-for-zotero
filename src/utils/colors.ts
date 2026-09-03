@@ -119,17 +119,58 @@ export const authColors = {
 // Chat Panel Additional Colors
 // ============================================
 
+export interface FeedbackBubbleColors {
+  background: string;
+  border: string;
+  color: string;
+}
+
+const feedbackBubbleColors = {
+  light: {
+    error: {
+      background: "#fff3f3",
+      border: "#ffcdd2",
+      color: "#d32f2f",
+    },
+    success: {
+      background: authColors.successBg,
+      border: authColors.successBorder,
+      color: authColors.successText,
+    },
+  },
+  dark: {
+    error: {
+      background: "rgba(248, 113, 113, 0.14)",
+      border: "rgba(248, 113, 113, 0.28)",
+      color: "#fca5a5",
+    },
+    success: {
+      background: "rgba(74, 222, 128, 0.14)",
+      border: "rgba(74, 222, 128, 0.28)",
+      color: "#86efac",
+    },
+  },
+} as const;
+
+export function resolveFeedbackBubbleColors(
+  kind: "error" | "success",
+  isDark: boolean,
+): FeedbackBubbleColors {
+  const palette = isDark ? feedbackBubbleColors.dark : feedbackBubbleColors.light;
+  return palette[kind];
+}
+
 export const chatColors = {
   // User message gradient
   userBubble: colors.userGradient,
   userBubbleText: "#ffffff",
 
-  // Error message
+  // Error message (light defaults; prefer resolveFeedbackBubbleColors)
   errorBubbleBg: colors.errorLight,
   errorBubbleBorder: colors.errorBorder,
   errorBubbleText: colors.error,
 
-  // Success message
+  // Success message (light defaults; prefer resolveFeedbackBubbleColors)
   successBubbleBg: authColors.successBg,
   successBubbleBorder: authColors.successBorder,
   successBubbleText: authColors.successText,

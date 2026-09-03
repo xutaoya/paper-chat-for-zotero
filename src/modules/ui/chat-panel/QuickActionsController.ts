@@ -11,6 +11,7 @@ import type { ChatPanelContext, ThemeColors } from "./types";
 import { HTML_NS } from "./types";
 import { createElement } from "./ChatPanelBuilder";
 import { openQuickActionEditDialog } from "./QuickActionEditDialog";
+import { resolveQuickActionChipTheme } from "./ComposerTheme";
 
 const CHIP_CLASS = "chat-quick-action-chip";
 const ADD_BUTTON_CLASS = "chat-quick-action-add";
@@ -51,6 +52,7 @@ function createQuickActionChip(
   runPrompt: (prompt: string) => Promise<void>,
   bar: HTMLElement,
 ): HTMLElement {
+  const chipTheme = resolveQuickActionChipTheme(theme);
   const chip = createElement(
     context.container.ownerDocument,
     "div",
@@ -61,12 +63,12 @@ function createQuickActionChip(
       padding: "5px 12px",
       borderRadius: "999px",
       border: `1px solid ${theme.borderColor}`,
-      background: theme.inputBg,
+      background: chipTheme.background,
       color: theme.textPrimary,
       cursor: "grab",
       fontSize: "12px",
       lineHeight: "1.3",
-      boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+      boxShadow: chipTheme.boxShadow,
       maxWidth: "100%",
       whiteSpace: "nowrap",
       userSelect: "none",
@@ -120,6 +122,7 @@ function createQuickActionChip(
   editIcon.style.width = "12px";
   editIcon.style.height = "12px";
   editIcon.style.pointerEvents = "none";
+  editIcon.style.filter = chipTheme.iconFilter;
   editBtn.appendChild(editIcon);
 
   const deleteBtn = createElement(
@@ -135,7 +138,7 @@ function createQuickActionChip(
       width: "15px",
       height: "15px",
       borderRadius: "50%",
-      background: theme.inputBg,
+      background: theme.dropdownBg,
       border: `1px solid ${theme.borderColor}`,
       opacity: "0",
       transition: "opacity 0.15s ease",
@@ -157,6 +160,7 @@ function createQuickActionChip(
   deleteIcon.style.width = "12px";
   deleteIcon.style.height = "12px";
   deleteIcon.style.pointerEvents = "none";
+  deleteIcon.style.filter = chipTheme.iconFilter;
   deleteBtn.appendChild(deleteIcon);
 
   chip.appendChild(label);
@@ -244,9 +248,10 @@ function enableChipReorder(
   let ghost: HTMLElement | null = null;
 
   const resetChipStyle = () => {
+    const chipTheme = resolveQuickActionChipTheme(theme);
     chip.style.opacity = "1";
     chip.style.cursor = "grab";
-    chip.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)";
+    chip.style.boxShadow = chipTheme.boxShadow;
     chip.style.borderColor = theme.borderColor;
   };
 
@@ -368,6 +373,7 @@ function createQuickActionManageButton(
   theme: ThemeColors,
   runPrompt: (prompt: string) => Promise<void>,
 ): HTMLElement {
+  const chipTheme = resolveQuickActionChipTheme(theme);
   const button = createElement(
     context.container.ownerDocument,
     "button",
@@ -383,7 +389,7 @@ function createQuickActionManageButton(
       boxSizing: "border-box",
       borderRadius: "50%",
       border: `1px dashed ${theme.borderColor}`,
-      background: theme.inputBg,
+      background: chipTheme.background,
       color: theme.textMuted,
       cursor: "pointer",
       flexShrink: "0",
@@ -406,6 +412,7 @@ function createQuickActionManageButton(
   plusIcon.style.height = "14px";
   plusIcon.style.display = "block";
   plusIcon.style.pointerEvents = "none";
+  plusIcon.style.filter = chipTheme.iconFilter;
   button.appendChild(plusIcon);
   button.addEventListener("click", (event) => {
     event.preventDefault();

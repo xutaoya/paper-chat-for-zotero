@@ -1,4 +1,6 @@
 import { copyToClipboard } from "./ChatPanelBuilder";
+import { isDarkMode } from "./ChatPanelTheme";
+import { getAgentUiSemanticColors, type AgentUiSemanticColors } from "./AgentUiTheme";
 import {
   formatToolDisplayLabel,
   type ParsedToolCallEntry,
@@ -18,6 +20,31 @@ export type ToolResultStatus = "running" | "success" | "error" | "cancelled";
 const TOOL_RESULT_MAX_HEIGHT_PX = 180;
 const TOOL_RESULT_USER_OPEN_ATTR = "data-user-open";
 const TOOL_RESULT_CONTENT_SIG_ATTR = "data-tool-result-content-sig";
+
+type ToolResultPalette = Pick<
+  AgentUiSemanticColors,
+  | "running"
+  | "success"
+  | "error"
+  | "cancelled"
+  | "toolResultPanelBg"
+  | "toolResultPanelBorder"
+  | "toolResultTextOpacity"
+> & { errorText: string };
+
+export function getToolResultPalette(): ToolResultPalette {
+  const semantic = getAgentUiSemanticColors();
+  return {
+    running: semantic.running,
+    success: semantic.success,
+    error: semantic.error,
+    cancelled: semantic.cancelled,
+    errorText: semantic.error,
+    toolResultPanelBg: semantic.toolResultPanelBg,
+    toolResultPanelBorder: semantic.toolResultPanelBorder,
+    toolResultTextOpacity: semantic.toolResultTextOpacity,
+  };
+}
 
 function createElement(
   doc: Document,
@@ -100,16 +127,16 @@ function getStatusLabel(status: ToolResultStatus): string {
   }
 }
 
-function getStatusColor(status: ToolResultStatus): string {
+function getStatusColor(status: ToolResultStatus, palette: ToolResultPalette): string {
   switch (status) {
     case "running":
-      return "#2563eb";
+      return palette.running;
     case "success":
-      return "#16a34a";
+      return palette.success;
     case "error":
-      return "#dc2626";
+      return palette.error;
     default:
-      return "#71717a";
+      return palette.cancelled;
   }
 }
 
@@ -212,6 +239,7 @@ function createStatusIcon(
 function createOutputSection(
   doc: Document,
   theme: ThemeColors,
+  palette: ToolResultPalette,
   entry: ParsedToolCallEntry,
   resultStatus: ToolResultStatus,
 ): HTMLElement {
@@ -238,6 +266,7 @@ function createOutputSection(
       opacity: "0.8",
     });
     argsLabel.textContent = getString("chat-tool-result-args-label");
+    argsLabel.setAttribute("data-tool-result-args-label", "true");
     argsBlock.appendChild(argsLabel);
 
     const argsPre = createElement(doc, "pre", {
@@ -277,6 +306,7 @@ function createOutputSection(
         opacity: "0.8",
       });
       outputLabel.textContent = getString("chat-tool-result-output-label");
+      outputLabel.setAttribute("data-tool-result-output-label", "true");
       outputBlock.appendChild(outputLabel);
     }
 
@@ -286,10 +316,10 @@ function createOutputSection(
       fontFamily: '"SF Mono", Monaco, Consolas, monospace',
       fontSize: "11px",
       lineHeight: "1.45",
-      color: resultStatus === "error" ? "#dc2626" : theme.textPrimary,
+      color: resultStatus === "error" ? palette.errorText : theme.textPrimary,
       whiteSpace: "pre-wrap",
       wordBreak: "break-word",
-      opacity: resultStatus === "error" ? "0.95" : "0.88",
+      opacity: resultStatus === "error" ? "0.95" : palette.toolResultTextOpacity,
     });
     outputPre.setAttribute("data-tool-result-output", "true");
     outputPre.textContent = outputText;
@@ -303,7 +333,6 @@ function createOutputSection(
 function bindToolResultInteractions(
   root: HTMLElement,
   doc: Document,
-  theme: ThemeColors,
   expandKey: string | null,
   canToggle: boolean,
   resultStatus: ToolResultStatus,
@@ -329,12 +358,6 @@ function bindToolResultInteractions(
       if (nextOpen && viewport) {
         scheduleAfterLayout(doc, () => scrollToolResultViewportToEnd(viewport, doc));
       }
-    });
-    trigger.addEventListener("mouseenter", () => {
-      trigger.style.background = theme.hoverBg;
-    });
-    trigger.addEventListener("mouseleave", () => {
-      trigger.style.background = "transparent";
     });
   }
 
@@ -408,10 +431,15 @@ function populateToolResultElement(
     canToggle,
   );
   const open = resolveToolResultOpen(root, expandKey, defaultOpen);
+  const palette = getToolResultPalette();
+  const dark = isDarkMode();
 
   root.replaceChildren();
   root.className =
     "paperchat-agent-activity-row paperchat-agent-activity-tool-row paperchat-tool-result";
+  if (dark) {
+    root.classList.add("paperchat-tool-result--dark");
+  }
   root.setAttribute("data-agent-activity-row", "tool");
   root.setAttribute("data-agent-activity-item-id", itemId);
   root.setAttribute(
@@ -481,7 +509,7 @@ function populateToolResultElement(
     flexShrink: "0",
     fontSize: "11px",
     fontWeight: "500",
-    color: getStatusColor(resultStatus),
+    color: getStatusColor(resultStatus, palette),
   });
   statusBadge.setAttribute("data-tool-result-status-badge", "true");
   statusBadge.appendChild(createStatusIcon(doc, resultStatus));
@@ -523,9 +551,11 @@ function populateToolResultElement(
       marginTop: "2px",
       marginBottom: "4px",
       borderRadius: "10px",
-      background: theme.hoverBg,
+      background: palette.toolResultPanelBg,
+      border: `1px solid ${palette.toolResultPanelBorder}`,
       overflow: "hidden",
     });
+    panel.className = "paperchat-tool-result-panel";
 
     const viewport = createElement(
       doc,
@@ -537,7 +567,9 @@ function populateToolResultElement(
       },
       { "data-tool-result-viewport": "true" },
     );
-    viewport.appendChild(createOutputSection(doc, theme, entry, resultStatus));
+    viewport.appendChild(
+      createOutputSection(doc, theme, palette, entry, resultStatus),
+    );
     panel.appendChild(viewport);
 
     const copyText = buildToolResultCopyText(entry);
@@ -553,6 +585,7 @@ function populateToolResultElement(
         "button",
       ) as HTMLButtonElement;
       copyButton.type = "button";
+      copyButton.className = "paperchat-tool-result-copy";
       copyButton.setAttribute("data-tool-result-copy", "true");
       Object.assign(copyButton.style, {
         border: "none",
@@ -565,14 +598,6 @@ function populateToolResultElement(
         color: theme.textMuted,
       });
       copyButton.textContent = getString("chat-tool-result-copy");
-      copyButton.addEventListener("mouseenter", () => {
-        copyButton.style.background = theme.buttonHoverBg;
-        copyButton.style.color = theme.textPrimary;
-      });
-      copyButton.addEventListener("mouseleave", () => {
-        copyButton.style.background = "transparent";
-        copyButton.style.color = theme.textMuted;
-      });
       footer.appendChild(copyButton);
       panel.appendChild(footer);
     }
@@ -585,7 +610,6 @@ function populateToolResultElement(
   bindToolResultInteractions(
     root,
     doc,
-    theme,
     expandKey,
     canToggle,
     resultStatus,
@@ -658,6 +682,80 @@ export function updateToolResultActivityElement(
     messageId,
   );
   return true;
+}
+
+export function applyToolResultTheme(
+  root: HTMLElement,
+  theme: ThemeColors,
+): void {
+  const palette = getToolResultPalette();
+  const dark = isDarkMode();
+  root.classList.toggle("paperchat-tool-result--dark", dark);
+
+  const resultStatus =
+    (root.getAttribute("data-tool-result-status") as ToolResultStatus | null) ??
+    "success";
+
+  const trigger = root.querySelector(
+    ".paperchat-tool-result-trigger",
+  ) as HTMLElement | null;
+  if (trigger) {
+    trigger.style.color = theme.textPrimary;
+  }
+
+  const title = trigger?.querySelector("span:nth-child(2)") as HTMLElement | null;
+  if (title) {
+    title.style.color = theme.textPrimary;
+  }
+
+  const kindIcon = trigger?.firstElementChild as HTMLElement | null;
+  if (kindIcon) {
+    kindIcon.style.color = theme.textMuted;
+  }
+
+  const chevron = root.querySelector(
+    ".paperchat-tool-result-chevron",
+  ) as HTMLElement | null;
+  if (chevron) {
+    chevron.style.color = theme.textMuted;
+  }
+
+  const badge = root.querySelector(
+    "[data-tool-result-status-badge]",
+  ) as HTMLElement | null;
+  if (badge) {
+    badge.style.color = getStatusColor(resultStatus, palette);
+  }
+
+  const panel = root.querySelector(
+    ".paperchat-tool-result-panel",
+  ) as HTMLElement | null;
+  if (panel) {
+    panel.style.background = palette.toolResultPanelBg;
+    panel.style.border = `1px solid ${palette.toolResultPanelBorder}`;
+  }
+
+  root.querySelectorAll("[data-tool-result-args]").forEach((node) => {
+    (node as HTMLElement).style.color = theme.textSecondary;
+  });
+
+  root.querySelectorAll("[data-tool-result-output]").forEach((node) => {
+    const el = node as HTMLElement;
+    el.style.color =
+      resultStatus === "error" ? palette.errorText : theme.textPrimary;
+    el.style.opacity =
+      resultStatus === "error" ? "0.95" : palette.toolResultTextOpacity;
+  });
+
+  root.querySelectorAll("[data-tool-result-copy]").forEach((node) => {
+    (node as HTMLElement).style.color = theme.textMuted;
+  });
+
+  root.querySelectorAll(
+    "[data-tool-result-args-label], [data-tool-result-output-label]",
+  ).forEach((node) => {
+    (node as HTMLElement).style.color = theme.textMuted;
+  });
 }
 
 export function getActivityMessageId(list: HTMLElement): string | undefined {

@@ -950,6 +950,28 @@
   background: rgba(100, 116, 139, 0.06);
 }
 
+.chat-container[data-theme="dark"] .paperchat-tool-result-trigger:hover,
+.paperchat-tool-result--dark .paperchat-tool-result-trigger:hover,
+.paperchat-agent-activity--dark .paperchat-tool-result-trigger:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.paperchat-tool-result-copy:hover {
+  background: rgba(100, 116, 139, 0.08);
+  color: #334155;
+}
+
+.chat-container[data-theme="dark"] .paperchat-tool-result-copy:hover,
+.paperchat-tool-result--dark .paperchat-tool-result-copy:hover,
+.paperchat-agent-activity--dark .paperchat-tool-result-copy:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e4e4e7;
+}
+
+.paperchat-tool-result-copy {
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
 .paperchat-tool-result-trigger:focus-visible {
   outline: 2px solid rgba(59, 130, 246, 0.45);
   outline-offset: -2px;
@@ -972,6 +994,20 @@
   .paperchat-tool-result-spinner {
     animation: none;
   }
+}
+
+.chat-container[data-theme="dark"] .chat-quick-action-chip,
+.chat-container[data-theme="dark"] .chat-quick-action-add {
+  box-shadow: none;
+}
+
+.chat-container[data-theme="dark"] .chat-quick-action-chip:hover,
+.chat-container[data-theme="dark"] .chat-quick-action-add:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.chat-container[data-theme="dark"] #chat-edit-message-cancel:hover {
+  color: var(--composer-context-focus, #e5e7eb);
 }
 
 .paperchat-agent-activity-search-row {
@@ -1011,17 +1047,41 @@
   color: #b91c1c !important;
 }
 
+.chat-container[data-theme="dark"] .paperchat-approval-card-btn--ghost:hover:not(:disabled),
+.paperchat-agent-activity--dark .paperchat-approval-card-btn--ghost:hover:not(:disabled) {
+  color: #fca5a5 !important;
+}
+
+.paperchat-todo-header-icon[data-complete="true"] {
+  color: #16a34a;
+}
+
+.chat-container[data-theme="dark"] .paperchat-todo-header-icon[data-complete="true"],
+.paperchat-agent-activity--dark .paperchat-todo-header-icon[data-complete="true"] {
+  color: #4ade80;
+}
+
+.paperchat-todo-list-count[data-complete="true"] {
+  color: #16a34a;
+}
+
+.chat-container[data-theme="dark"] .paperchat-todo-list-count[data-complete="true"],
+.paperchat-agent-activity--dark .paperchat-todo-list-count[data-complete="true"] {
+  color: #4ade80;
+}
+
 .paperchat-todo-list-trigger:hover {
   background: rgba(100, 116, 139, 0.06);
+}
+
+.chat-container[data-theme="dark"] .paperchat-todo-list-trigger:hover,
+.paperchat-agent-activity--dark .paperchat-todo-list-trigger:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .paperchat-todo-list-trigger:focus-visible {
   outline: 2px solid rgba(59, 130, 246, 0.45);
   outline-offset: -2px;
-}
-
-.paperchat-todo-header-icon[data-complete="true"] {
-  color: #16a34a;
 }
 
 .paperchat-todo-status-icon--in-progress .paperchat-todo-status-arc {
@@ -1061,6 +1121,16 @@
   opacity: 1;
 }
 
+.chat-container[data-theme="dark"] .paperchat-agent-activity-summary,
+.paperchat-agent-activity--dark .paperchat-agent-activity-summary {
+  color: #a1a1aa;
+}
+
+.chat-container[data-theme="dark"] .paperchat-agent-activity-summary:hover,
+.paperchat-agent-activity--dark .paperchat-agent-activity-summary:hover {
+  color: #e4e4e7;
+}
+
 .paperchat-tool-call-dot.is-calling {
   animation: paperchat-tool-pulse 1.2s ease-in-out infinite;
 }
@@ -1082,4 +1152,42 @@
   .paperchat-tool-call-dot.is-calling {
     animation: none;
   }
+}
+
+.chat-container[data-theme="dark"] .chat-panel-toast-error {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.28);
+  color: #fca5a5;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.chat-container[data-theme="dark"] .chat-panel-toast-success {
+  background: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.28);
+  color: #86efac;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.chat-container[data-theme="dark"] .error-bubble {
+  background: rgba(248, 113, 113, 0.14);
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
+.chat-container[data-theme="dark"] .user-bubble {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: #fff;
+}
+
+.chat-container[data-theme="dark"] .assistant-bubble {
+  background: #2d2d2d;
+  color: #e0e0e0;
+  border-color: #444;
+  box-shadow: none;
+}
+
+.chat-container[data-theme="dark"] .copy-btn {
+  background: rgba(45, 45, 45, 0.95);
+  border-color: #555;
+  color: #e0e0e0;
 }

@@ -20,7 +20,7 @@ import type {
   RequestUserInputResponse,
   ToolApprovalResolution,
 } from "../../../types/tool";
-import { chatColors } from "../../../utils/colors";
+import { resolveFeedbackBubbleColors } from "../../../utils/colors";
 import type { ThemeColors } from "./types";
 import { showChatPanelToast } from "./ChatPanelToast";
 import { HTML_NS } from "./types";
@@ -301,7 +301,8 @@ import {
   copyToClipboard,
 } from "./ChatPanelBuilder";
 import { getString } from "../../../utils/locale";
-import { darkTheme } from "./ChatPanelTheme";
+import { darkTheme, isDarkMode } from "./ChatPanelTheme";
+import { getAgentUiSemanticColors, getAgentBadgeColors } from "./AgentUiTheme";
 
 function getImageAttachmentSrc(image: ImageAttachment): string {
   if (image.type === "base64") {
@@ -833,10 +834,12 @@ export function createMessageElement(
       borderRadius: "14px",
     };
   } else if (msg.role === "error") {
+    const errorColors = resolveFeedbackBubbleColors("error", isDarkMode());
+    bubbleClass = "chat-bubble error-bubble";
     bubbleStyle = {
-      background: chatColors.errorBubbleBg,
-      color: chatColors.errorBubbleText,
-      border: `1px solid ${chatColors.errorBubbleBorder}`,
+      background: errorColors.background,
+      color: errorColors.color,
+      border: `1px solid ${errorColors.border}`,
       borderBottomLeftRadius: "4px",
     };
     bubbleLayout = {
@@ -1282,7 +1285,7 @@ function showInlineMessageActionSuccess(
   button.textContent = "\u2713";
   button.setAttribute("title", message);
   button.setAttribute("aria-label", message);
-  button.style.color = chatColors.successBubbleText;
+  button.style.color = resolveFeedbackBubbleColors("success", isDarkMode()).color;
   showChatPanelToast(resolveChatPanelContainer(button), message, "success", {
     anchor: resolveMessageAnchor(button) ?? button,
   });
@@ -2063,6 +2066,8 @@ function deriveApprovalBannerState(
     toolApprovalState.pendingRequests.length - 1,
     0,
   );
+  const semantic = getAgentUiSemanticColors();
+  const pendingBadge = getAgentBadgeColors("pending");
 
   return {
     kind: "waiting_approval",
@@ -2072,8 +2077,8 @@ function deriveApprovalBannerState(
     statusLabel: formatPendingApprovalLabel(
       toolApprovalState.pendingRequests.length,
     ),
-    accentColor: "#b45309",
-    accentBackground: "rgba(245, 158, 11, 0.16)",
+    accentColor: semantic.warning,
+    accentBackground: pendingBadge.background,
     approvalRequest: activeRequest,
   };
 }
@@ -2085,6 +2090,7 @@ function deriveResolvedApprovalBannerState(
 ): ExecutionBannerState {
   const resolvedLabel = formatApprovalResolutionLabel(resolution);
   const wasAllowed = resolution.verdict === "allow";
+  const semantic = getAgentUiSemanticColors();
 
   return {
     kind: "approval_resolved",
@@ -2099,10 +2105,10 @@ function deriveResolvedApprovalBannerState(
       nextPendingCount > 0
         ? formatPendingApprovalLabel(nextPendingCount)
         : undefined,
-    accentColor: wasAllowed ? "#15803d" : "#b91c1c",
+    accentColor: wasAllowed ? semantic.successStrong : semantic.errorStrong,
     accentBackground: wasAllowed
-      ? "rgba(34, 197, 94, 0.16)"
-      : "rgba(239, 68, 68, 0.14)",
+      ? semantic.successSurface
+      : semantic.errorSurface,
   };
 }
 
@@ -2359,8 +2365,13 @@ function resolveExecutionBannerAccent(
             background: "rgba(245, 158, 11, 0.16)",
             borderColor: "rgba(245, 158, 11, 0.24)",
           };
-    case "approval_resolved":
-      return banner.accentColor === "#b91c1c"
+    case "approval_resolved": {
+      const semantic = getAgentUiSemanticColors();
+      const wasDenied =
+        banner.icon === "×" ||
+        banner.accentColor === semantic.errorStrong ||
+        banner.accentColor === "#b91c1c";
+      return wasDenied
         ? isDark
           ? {
               color: "#fca5a5",
@@ -2368,8 +2379,8 @@ function resolveExecutionBannerAccent(
               borderColor: "rgba(248, 113, 113, 0.3)",
             }
           : {
-              color: "#b91c1c",
-              background: "rgba(239, 68, 68, 0.12)",
+              color: semantic.errorStrong,
+              background: semantic.errorSurface,
               borderColor: "rgba(239, 68, 68, 0.2)",
             }
         : isDark
@@ -2379,10 +2390,11 @@ function resolveExecutionBannerAccent(
               borderColor: "rgba(74, 222, 128, 0.3)",
             }
           : {
-              color: "#15803d",
-              background: "rgba(34, 197, 94, 0.14)",
+              color: semantic.successStrong,
+              background: semantic.successSurface,
               borderColor: "rgba(34, 197, 94, 0.2)",
             };
+    }
     default:
       return {
         color: banner.accentColor || theme.textPrimary,
