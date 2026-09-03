@@ -148,6 +148,10 @@
   background: #a1a1a1;
 }
 
+.chat-message-time-separator {
+  flex-shrink: 0;
+}
+
 /* Empty State */
 .empty-state {
   display: flex;
@@ -242,6 +246,14 @@
   border: 1px solid #e0e0e0;
   border-bottom-left-radius: 4px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.assistant-message .chat-bubble--assistant-flat {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  max-width: 100%;
+  padding: 4px 0;
 }
 
 .error-bubble {
@@ -876,5 +888,198 @@
 @media (prefers-reduced-motion: reduce) {
   #chat-input-wrapper.is-focused {
     transform: none;
+  }
+}
+
+/* Agent activity shimmer (beUI-style text sweep) */
+.paperchat-agent-activity-shimmer {
+  display: inline;
+  font-weight: 500;
+  background-image: linear-gradient(
+    110deg,
+    #8b8b95 30%,
+    #f4f4f5 50%,
+    #8b8b95 70%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: paperchat-agent-activity-shimmer 1.8s linear infinite;
+}
+
+.chat-container[data-theme="dark"] .paperchat-agent-activity-shimmer,
+.paperchat-agent-activity--dark .paperchat-agent-activity-shimmer {
+  background-image: linear-gradient(
+    110deg,
+    #71717a 30%,
+    #fafafa 50%,
+    #71717a 70%
+  );
+}
+
+@keyframes paperchat-agent-activity-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paperchat-agent-activity-shimmer {
+    animation: none;
+    color: inherit;
+    background-image: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+  }
+}
+
+.paperchat-agent-activity-text-row {
+  opacity: 0.88;
+}
+
+.paperchat-agent-activity-tool-row {
+  opacity: 0.95;
+}
+
+.paperchat-tool-result-trigger:hover {
+  background: rgba(100, 116, 139, 0.06);
+}
+
+.paperchat-tool-result-trigger:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.45);
+  outline-offset: -2px;
+}
+
+.paperchat-tool-result-spinner {
+  animation: paperchat-tool-result-spin 0.9s linear infinite;
+}
+
+@keyframes paperchat-tool-result-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paperchat-tool-result-spinner {
+    animation: none;
+  }
+}
+
+.paperchat-agent-activity-search-row {
+  opacity: 0.96;
+}
+
+.paperchat-search-source-row {
+  min-width: 0;
+}
+
+.paperchat-search-source-favicon img {
+  display: block;
+}
+
+.paperchat-fixed-tooltip {
+  position: absolute;
+  z-index: 10030;
+  display: none;
+  width: max-content;
+  max-width: 420px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 400;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
+  text-overflow: clip;
+  pointer-events: none;
+}
+
+.paperchat-approval-card-btn--ghost:hover:not(:disabled) {
+  color: #b91c1c !important;
+}
+
+.paperchat-todo-list-trigger:hover {
+  background: rgba(100, 116, 139, 0.06);
+}
+
+.paperchat-todo-list-trigger:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.45);
+  outline-offset: -2px;
+}
+
+.paperchat-todo-header-icon[data-complete="true"] {
+  color: #16a34a;
+}
+
+.paperchat-todo-status-icon--in-progress .paperchat-todo-status-arc {
+  stroke-dasharray: 42 56;
+  transform-origin: 12px 12px;
+  animation: paperchat-todo-arc-spin 1.1s linear infinite;
+}
+
+@keyframes paperchat-todo-arc-spin {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(270deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paperchat-todo-status-icon--in-progress .paperchat-todo-status-arc {
+    animation: none;
+    stroke-dasharray: 28 56;
+  }
+
+  .paperchat-todo-list-body,
+  .paperchat-todo-list-chevron {
+    transition: none !important;
+  }
+}
+
+.paperchat-agent-activity-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.paperchat-agent-activity-summary:hover {
+  opacity: 1;
+}
+
+.paperchat-tool-call-dot.is-calling {
+  animation: paperchat-tool-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes paperchat-tool-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.35;
+    transform: scale(0.88);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paperchat-tool-call-dot.is-calling {
+    animation: none;
   }
 }

@@ -172,6 +172,14 @@ paperchat-chat-edit-message-failed = Could not edit this message
 
 paperchat-chat-message-edited = Edited
 
+paperchat-chat-time-full = { $year }/{ $month }/{ $day } { $time }
+
+paperchat-chat-time-same-year = { $month }/{ $day } { $time }
+
+paperchat-chat-time-today = Today { $time }
+
+paperchat-chat-time-yesterday = Yesterday { $time }
+
 paperchat-chat-copy = Copy
 
 paperchat-chat-quote-reply = Quote this reply
@@ -237,6 +245,28 @@ paperchat-chat-thinking = Thinking
 paperchat-chat-thinking-streaming = Thinking...
 
 paperchat-chat-thinking-tokens = { $tokens } tokens
+
+paperchat-chat-agent-activity-thinking = Thinking…
+
+paperchat-chat-agent-activity-summary-thought = Thought for { $seconds }s
+
+paperchat-chat-agent-activity-summary-tools = Ran { $count } tools · { $seconds }s
+
+paperchat-chat-agent-activity-summary-mixed = Thought and ran { $tools } tools · { $seconds }s
+
+paperchat-chat-agent-activity-searching-web = Searching the web...
+paperchat-chat-agent-activity-searching-scholarly = Searching scholarly sources...
+
+paperchat-chat-agent-activity-token-suffix = · { $tokens } tokens
+
+paperchat-chat-tool-result-running = Running
+paperchat-chat-tool-result-completed = Completed
+paperchat-chat-tool-result-failed = Failed
+paperchat-chat-tool-result-cancelled = Cancelled
+paperchat-chat-tool-result-copy = Copy result
+paperchat-chat-tool-result-copied = Copied
+paperchat-chat-tool-result-args-label = Arguments
+paperchat-chat-tool-result-output-label = Result
 
 paperchat-chat-history-title = Chat { $time }
 
@@ -324,6 +354,18 @@ paperchat-tool-status-done = Done
 
 paperchat-tool-status-error = Error
 
+paperchat-tool-label-get-pages = Read pages
+paperchat-tool-label-web-search = Web search
+paperchat-tool-label-search-scholarly-sources = Scholarly search
+paperchat-tool-label-search-paper-content = Search paper
+paperchat-tool-label-search-with-regex = Regex search
+paperchat-tool-label-get-paper-section = Read section
+paperchat-tool-label-get-paper-metadata = Paper metadata
+paperchat-tool-label-get-full-text = Read full text
+paperchat-tool-label-get-outline = Outline
+paperchat-tool-label-presentation = Presentation
+paperchat-tool-label-create-note = Create note
+
 paperchat-chat-tool-group-earlier = Show { $count } earlier calls
 
 paperchat-tool-error-fix-hint-label = Fix hint: 
@@ -369,6 +411,19 @@ paperchat-chat-banner-session = Session
 paperchat-chat-banner-always = Always
 
 paperchat-chat-banner-deny = Deny
+
+paperchat-chat-todo-list-aria-label = Agent task list
+
+paperchat-chat-todo-list-recovering-title = Recovering plan
+
+paperchat-chat-todo-list-title = Implementation plan
+
+paperchat-chat-todo-list-untitled-step = Task
+
+paperchat-chat-approval-card-title = Allow { $tool }?
+paperchat-chat-approval-card-tool-label = Tool
+paperchat-chat-approval-card-risk-label = Access
+paperchat-chat-approval-card-args-label = Arguments
 
 paperchat-chat-user-input-title = Need Your Choice
 

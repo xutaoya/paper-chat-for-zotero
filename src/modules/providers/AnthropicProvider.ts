@@ -20,7 +20,10 @@ import type {
   ToolCallingOptions,
 } from "../../types/provider";
 import type { ToolDefinition, ToolCall } from "../../types/tool";
-import { extractReasoningTokensFromUsage } from "../../utils/apiUsage";
+import {
+  extractReasoningTokensFromUsage,
+  extractTurnTokenUsage,
+} from "../../utils/apiUsage";
 import { parseSSEStreamWithToolCalling } from "./SSEParser";
 import { normalizeAnthropicStopReason } from "./stream-stop-reason";
 
@@ -478,10 +481,12 @@ export class AnthropicProvider extends BaseProvider {
               break;
 
             case "usage_update": {
-              const reported = extractReasoningTokensFromUsage(event.usage);
-              if (reported !== undefined) {
-                reasoningTokens = reported;
-                onUsageUpdate?.({ reasoningTokens: reported });
+              const delta = extractTurnTokenUsage(event.usage);
+              if (delta) {
+                if (delta.reasoningTokens !== undefined) {
+                  reasoningTokens = delta.reasoningTokens;
+                }
+                onUsageUpdate?.(delta);
               }
               break;
             }

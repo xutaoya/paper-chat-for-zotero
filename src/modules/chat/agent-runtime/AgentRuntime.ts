@@ -19,6 +19,7 @@ import type {
 } from "../../../types/tool";
 import type { ToolCallingProvider } from "../../../types/provider";
 import { getErrorMessage } from "../../../utils/common";
+import { applyTurnTokenUsage } from "../../../utils/apiUsage";
 import { isAbortRequested } from "../../../utils/abort";
 import { getPref } from "../../../utils/prefs";
 import { isAbortError, SessionRunInvalidatedError } from "../errors";
@@ -563,7 +564,9 @@ export class AgentRuntime {
         );
 
         if (result.reasoningTokens !== undefined) {
-          assistantMessage.reasoningTokens = result.reasoningTokens;
+          applyTurnTokenUsage(assistantMessage, {
+            reasoningTokens: result.reasoningTokens,
+          });
         }
 
         this.ensureSessionTracked(sendingSession, sessionRunId);
@@ -1364,14 +1367,11 @@ export class AgentRuntime {
               );
             }
           },
-          onUsageUpdate: ({ reasoningTokens }) => {
-            if (
-              !this.callbacks.isSessionTracked(sendingSession, sessionRunId) ||
-              reasoningTokens === undefined
-            ) {
+          onUsageUpdate: (delta) => {
+            if (!this.callbacks.isSessionTracked(sendingSession, sessionRunId)) {
               return;
             }
-            assistantMessage.reasoningTokens = reasoningTokens;
+            applyTurnTokenUsage(assistantMessage, delta);
             assistantMessage.streamingState = "in_progress";
             this.messageCheckpointer.schedule(
               sendingSession,
@@ -1382,7 +1382,7 @@ export class AgentRuntime {
               this.callbacks.onReasoningUpdate?.(
                 assistantMessage.reasoning ?? "",
                 assistantMessage.id,
-                reasoningTokens,
+                assistantMessage.reasoningTokens,
               );
             }
           },

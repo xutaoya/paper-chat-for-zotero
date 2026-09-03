@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { extractReasoningTokensFromUsage } from "../src/utils/apiUsage.ts";
+import {
+  extractReasoningTokensFromUsage,
+  extractTurnTokenUsage,
+  getTurnTokenTotal,
+  mergeTurnTokenUsage,
+} from "../src/utils/apiUsage.ts";
 
 describe("extractReasoningTokensFromUsage", function () {
   it("reads reasoning_tokens from completion_tokens_details", function () {
@@ -32,5 +37,36 @@ describe("extractReasoningTokensFromUsage", function () {
   it("returns undefined when usage is missing", function () {
     assert.equal(extractReasoningTokensFromUsage(null), undefined);
     assert.equal(extractReasoningTokensFromUsage({}), undefined);
+  });
+});
+
+describe("turn token usage", function () {
+  it("extracts input and output tokens from provider usage", function () {
+    assert.deepEqual(
+      extractTurnTokenUsage({
+        prompt_tokens: 1200,
+        completion_tokens: 340,
+      }),
+      {
+        inputTokens: 1200,
+        outputTokens: 340,
+        totalTokens: undefined,
+        reasoningTokens: undefined,
+      },
+    );
+  });
+
+  it("merges usage across multiple provider rounds", function () {
+    const merged = mergeTurnTokenUsage(
+      { inputTokens: 1000, outputTokens: 200 },
+      { inputTokens: 500, outputTokens: 150, reasoningTokens: 80 },
+    );
+    assert.deepEqual(merged, {
+      inputTokens: 1500,
+      outputTokens: 350,
+      reasoningTokens: 80,
+      totalTokens: undefined,
+    });
+    assert.equal(getTurnTokenTotal(merged), 1850);
   });
 });

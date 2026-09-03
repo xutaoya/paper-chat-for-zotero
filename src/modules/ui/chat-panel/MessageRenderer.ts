@@ -6,7 +6,6 @@ import { config } from "../../../../package.json";
 import type {
   ChatMessage,
   ExecutionPlan,
-  ExecutionPlanStep,
   ImageAttachment,
   QuotedMessageRef,
   ToolApprovalState,
@@ -27,33 +26,34 @@ import { showChatPanelToast } from "./ChatPanelToast";
 import { HTML_NS } from "./types";
 import {
   formatMarkdownForMessageCopy,
+  messageHasAgentActivityContent,
   type MarkdownRenderOptions,
   renderMarkdownToElement,
 } from "./MarkdownRenderer";
+import { createAgentActivityPanel } from "./AgentActivityPanel";
+import { createToolApprovalCardElement, type ToolApprovalCardBanner } from "./ApprovalCardElement";
+import {
+  createTodoListElement,
+  updateTodoListElement,
+} from "./TodoListElement";
 import { isMaxIterationsNoticeContent } from "../../chat/agent-runtime/messages";
 import { isTerminalPresentationArtifact } from "../../chat/presentation-artifacts";
 import { selectChatMessagePresentations } from "../../chat/message-presentation";
 import { canSummarizeAssistantReply } from "./NoteSummaryActions";
+import {
+  createMessageTimeSeparatorElement,
+  shouldShowMessageTimeSeparator,
+} from "./MessageTimeSeparator";
 import { canQuoteAssistantReply } from "../../chat/quoted-messages";
-import { formatCompactTokenCount, resolveReasoningTokenCount } from "../../../utils/tokens";
 
 export function getStreamingContentSelector(messageId: string): string {
   return `[data-streaming-content-for="${messageId}"]`;
 }
 
-export function getStreamingReasoningSelector(messageId: string): string {
-  return `[data-streaming-reasoning-for="${messageId}"]`;
-}
-
-export function getStreamingReasoningContainerSelector(
-  messageId: string,
-): string {
-  return `[data-streaming-reasoning-container-for="${messageId}"]`;
-}
-
-export function getStreamingReasoningTokensSelector(messageId: string): string {
-  return `[data-streaming-reasoning-tokens-for="${messageId}"]`;
-}
+export {
+  getStreamingReasoningSelector,
+  getStreamingReasoningContainerSelector,
+} from "./AgentActivityPanel";
 
 const CHAT_HISTORY_BOTTOM_STICKY_THRESHOLD = 24;
 const CHAT_HISTORY_AUTO_SCROLL_ATTR = "data-auto-scroll";
@@ -302,8 +302,6 @@ import {
 } from "./ChatPanelBuilder";
 import { getString } from "../../../utils/locale";
 import { darkTheme } from "./ChatPanelTheme";
-
-const RECOVERY_STEP_PREFIX = "replan:";
 
 function getImageAttachmentSrc(image: ImageAttachment): string {
   if (image.type === "base64") {
@@ -820,11 +818,19 @@ export function createMessageElement(
 
   // 根据角色设置气泡样式
   let bubbleStyle: Record<string, string>;
+  let bubbleLayout: Record<string, string>;
+  let bubbleClass = "chat-bubble";
   if (msg.role === "user") {
     bubbleStyle = {
       background: theme.userBubbleBg,
       color: theme.userBubbleText,
       borderBottomRightRadius: "4px",
+    };
+    bubbleLayout = {
+      display: "inline-block",
+      maxWidth: "85%",
+      padding: "12px 16px",
+      borderRadius: "14px",
     };
   } else if (msg.role === "error") {
     bubbleStyle = {
@@ -833,13 +839,25 @@ export function createMessageElement(
       border: `1px solid ${chatColors.errorBubbleBorder}`,
       borderBottomLeftRadius: "4px",
     };
+    bubbleLayout = {
+      display: "inline-block",
+      maxWidth: "85%",
+      padding: "12px 16px",
+      borderRadius: "14px",
+    };
   } else {
+    bubbleClass = "chat-bubble chat-bubble--assistant-flat";
     bubbleStyle = {
-      background: theme.assistantBubbleBg,
+      background: "transparent",
       color: theme.textPrimary,
-      border: `1px solid ${theme.borderColor}`,
-      borderBottomLeftRadius: "4px",
-      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
+      border: "none",
+      boxShadow: "none",
+    };
+    bubbleLayout = {
+      display: "block",
+      maxWidth: "100%",
+      padding: "4px 0",
+      borderRadius: "0",
     };
   }
 
@@ -848,15 +866,12 @@ export function createMessageElement(
     "div",
     {
       position: "relative",
-      display: "inline-block",
-      maxWidth: "85%",
-      padding: "12px 16px",
-      borderRadius: "14px",
       wordWrap: "break-word",
       textAlign: "left",
+      ...bubbleLayout,
       ...bubbleStyle,
     },
-    { class: "chat-bubble" },
+    { class: bubbleClass },
   );
 
   const contentAttrs: Record<string, string> = { class: "chat-content" };
@@ -893,6 +908,14 @@ export function createMessageElement(
     content.textContent = `⚠️ ${details.display}`;
     rawContent = details.raw;
   } else {
+    const isReasoningStreaming =
+      isLastAssistant && msg.streamingState === "in_progress";
+    const hasAgentActivity = messageHasAgentActivityContent(
+      msg.reasoning,
+      msg.content,
+      isReasoningStreaming,
+    );
+
     // Render assistant message as markdown
     const markdownOptions = getMessageMarkdownRenderOptions(
       renderOptions.markdown,
@@ -934,8 +957,14 @@ export function createMessageElement(
       ? {
           ...messageMarkdownOptions,
           enableAgentMaxPlanningIterationsSettingsLink: true,
+          ...(hasAgentActivity ? { suppressToolCallCards: true } : {}),
         }
-      : messageMarkdownOptions;
+      : hasAgentActivity
+        ? {
+            ...messageMarkdownOptions,
+            suppressToolCallCards: true,
+          }
+        : messageMarkdownOptions;
     if (msg.streamingState === "in_progress") {
       renderMarkdownToElement(
         content,
@@ -952,35 +981,20 @@ export function createMessageElement(
         trustedMarkdownOptions,
       );
     }
-  }
 
-  // Add reasoning section for assistant messages (before content)
-  if (msg.role === "assistant") {
-    const isReasoningStreaming =
-      isLastAssistant && msg.streamingState === "in_progress";
-    if (msg.reasoning || isReasoningStreaming) {
-      const reasoningContainer = createReasoningContainer(
-        doc,
-        theme,
-        msg.reasoning || "",
-        isReasoningStreaming,
-        msg.id,
-        msg.reasoningTokens,
-      );
-      if (isReasoningStreaming) {
-        reasoningContainer.setAttribute(
-          "data-streaming-reasoning-container-for",
-          msg.id,
-        );
-        const reasoningBody = reasoningContainer.querySelector(
-          '[data-streaming-reasoning-role="body"]',
-        ) as HTMLElement | null;
-        reasoningBody?.setAttribute("data-streaming-reasoning-for", msg.id);
-        if (!msg.reasoning) {
-          reasoningContainer.style.display = "none";
-        }
+    if (hasAgentActivity) {
+      const activityPanel = createAgentActivityPanel(doc, theme, {
+        messageId: msg.id,
+        reasoning: msg.reasoning || "",
+        content: msg.content,
+        isWorking: isReasoningStreaming,
+        startedAt: msg.timestamp,
+        turnUsage: msg.turnUsage,
+      });
+      if (isReasoningStreaming && !msg.reasoning && !msg.content.includes("<tool-call")) {
+        activityPanel.style.display = "none";
       }
-      bubble.appendChild(reasoningContainer);
+      bubble.appendChild(activityPanel);
     }
   }
 
@@ -1074,166 +1088,6 @@ export function createMessageElement(
   }
 
   return wrapper;
-}
-
-function formatThinkingTokenLabel(tokenCount: number): string {
-  return getString("chat-thinking-tokens", {
-    args: {
-      tokens: formatCompactTokenCount(Math.max(0, tokenCount)),
-    },
-  });
-}
-
-function createReasoningTokenBadge(
-  doc: Document,
-  theme: ThemeColors,
-  tokenCount: number,
-  messageId?: string,
-): HTMLElement {
-  const badge = createElement(doc, "span", {
-    fontSize: "11px",
-    lineHeight: "1.4",
-    padding: "1px 6px",
-    borderRadius: "4px",
-    border: `1px solid ${theme.borderColor}`,
-    color: theme.textMuted,
-    background: theme.assistantBubbleBg,
-    flexShrink: "0",
-  });
-  if (messageId) {
-    badge.setAttribute("data-streaming-reasoning-tokens-for", messageId);
-  }
-  badge.textContent = formatThinkingTokenLabel(tokenCount);
-  badge.style.display = tokenCount > 0 ? "inline" : "none";
-  return badge;
-}
-
-export function updateStreamingReasoningTokens(
-  container: HTMLElement,
-  reasoning: string,
-  messageId: string,
-  apiReasoningTokens?: number,
-): void {
-  const tokenCount = resolveReasoningTokenCount(reasoning, apiReasoningTokens);
-  const badge = container.querySelector(
-    getStreamingReasoningTokensSelector(messageId),
-  ) as HTMLElement | null;
-  if (!badge) {
-    return;
-  }
-  badge.textContent = formatThinkingTokenLabel(tokenCount);
-  badge.style.display = tokenCount > 0 ? "inline" : "none";
-}
-
-/**
- * Create a collapsible reasoning/thinking container
- * Uses inline styles only (Zotero's XHTML context doesn't reliably support <style> injection)
- */
-function createReasoningContainer(
-  doc: Document,
-  theme: ThemeColors,
-  reasoning: string,
-  isStreaming: boolean,
-  messageId?: string,
-  reasoningTokens?: number,
-): HTMLElement {
-  const container = createElement(doc, "div", {
-    marginBottom: "8px",
-    borderLeft: `3px solid ${theme.borderColor}`,
-    borderRadius: "4px",
-  });
-
-  // Header with toggle
-  const header = createElement(doc, "div", {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    padding: "6px 10px",
-    cursor: "pointer",
-    userSelect: "none",
-    fontSize: "12px",
-    color: theme.textMuted,
-    opacity: "0.7",
-  });
-  header.addEventListener("mouseenter", () => {
-    header.style.opacity = "1";
-  });
-  header.addEventListener("mouseleave", () => {
-    header.style.opacity = "0.7";
-  });
-
-  const arrow = createElement(doc, "span", {
-    fontSize: "10px",
-    display: "inline-block",
-    transition: "transform 0.2s",
-    transform: isStreaming ? "rotate(90deg)" : "rotate(0deg)",
-  });
-  arrow.textContent = "\u25B6";
-
-  const thinkingIcon = createMessageActionIcon(
-    doc,
-    "thinking",
-    getString("chat-thinking"),
-  );
-  Object.assign(thinkingIcon.style, {
-    width: "14px",
-    height: "14px",
-    opacity: isStreaming ? "0.85" : "0.65",
-    flexShrink: "0",
-    animation: isStreaming ? "paperchat-thinking-flash 1.2s ease-in-out infinite" : "",
-  });
-
-  const label = createElement(doc, "span", {});
-  label.textContent = isStreaming
-    ? getString("chat-thinking-streaming")
-    : getString("chat-thinking");
-
-  const tokenBadge = createReasoningTokenBadge(
-    doc,
-    theme,
-    resolveReasoningTokenCount(reasoning, reasoningTokens),
-    isStreaming ? messageId : undefined,
-  );
-
-  header.appendChild(arrow);
-  header.appendChild(thinkingIcon);
-  header.appendChild(label);
-  header.appendChild(tokenBadge);
-
-  // Body
-  const body = createElement(doc, "div", {
-    padding: "4px 10px 8px 10px",
-    fontSize: "13px",
-    lineHeight: "1.5",
-    color: theme.textMuted,
-    opacity: "0.75",
-    whiteSpace: "pre-wrap",
-    wordWrap: "break-word",
-    overflow: "hidden",
-    display: isStreaming ? "block" : "none",
-  });
-
-  if (isStreaming) {
-    body.setAttribute("data-streaming-reasoning-role", "body");
-    if (reasoning) {
-      body.textContent = reasoning;
-    }
-  } else {
-    body.textContent = reasoning;
-  }
-
-  // Toggle handler — uses inline display style
-  let collapsed = !isStreaming;
-  header.addEventListener("click", () => {
-    collapsed = !collapsed;
-    body.style.display = collapsed ? "none" : "block";
-    arrow.style.transform = collapsed ? "rotate(0deg)" : "rotate(90deg)";
-  });
-
-  container.appendChild(header);
-  container.appendChild(body);
-
-  return container;
 }
 
 function createRetryActionButton(
@@ -1755,12 +1609,19 @@ export function renderMessages(
   // 100+ message elements directly to the live chatHistory forces a reflow per
   // node; batching through a fragment collapses that to a single insertion.
   const fragment = doc.createDocumentFragment();
+  let previousMessageTimestamp: number | undefined;
   for (let index = 0; index < presentations.length; index++) {
     const {
       message: msg,
       attachedError,
       attachedNotices,
     } = presentations[index];
+    if (shouldShowMessageTimeSeparator(previousMessageTimestamp, msg.timestamp)) {
+      fragment.appendChild(
+        createMessageTimeSeparatorElement(doc, theme, msg.timestamp),
+      );
+    }
+    previousMessageTimestamp = msg.timestamp;
     const isLastAssistant = index === lastAssistantIndex;
     fragment.appendChild(
       createMessageElement(
@@ -1794,11 +1655,56 @@ export function updateExecutionPlanView(
   executionPlan?: ExecutionPlan,
   _toolApprovalState?: ToolApprovalState,
 ): void {
-  const banner = deriveExecutionBannerState(executionPlan);
-  updateExecutionInsetPanel(panel, theme, banner, {
-    placement: "top",
-    showApprovalActions: false,
-  });
+  const doc = panel.ownerDocument;
+  if (!doc) {
+    return;
+  }
+
+  const shouldShow = Boolean(
+    executionPlan &&
+      executionPlan.status === "in_progress" &&
+      executionPlan.steps.length > 0,
+  );
+
+  const existingBanner = panel.querySelector(
+    ".chat-execution-banner",
+  ) as HTMLElement | null;
+  const existingTodo = panel.querySelector(
+    ".paperchat-todo-list-root",
+  ) as HTMLElement | null;
+
+  if (!shouldShow || !executionPlan) {
+    existingBanner?.remove();
+    existingTodo?.remove();
+    detachExecutionInsetResizeObserver(panel);
+    panel.dataset.visibleHeight = "0";
+    panel.style.height = "0px";
+    panel.style.opacity = "0";
+    panel.style.transform = "translateY(-6px)";
+    panel.style.pointerEvents = "none";
+    syncExecutionInsets(panel);
+    return;
+  }
+
+  existingBanner?.remove();
+
+  let todoRoot = existingTodo;
+  if (!todoRoot) {
+    todoRoot = createTodoListElement(doc, theme, executionPlan, {
+      defaultOpen: true,
+      collapseOnComplete: true,
+    });
+    panel.appendChild(todoRoot);
+  } else {
+    updateTodoListElement(todoRoot, theme, executionPlan);
+  }
+
+  syncExecutionInsetHeight(panel, todoRoot);
+  attachExecutionInsetResizeObserver(panel, todoRoot);
+  panel.style.pointerEvents = "auto";
+  panel.style.opacity = "1";
+  panel.style.transform = "translateY(0)";
+  syncExecutionInsets(panel);
 }
 
 export function updateApprovalView(
@@ -2139,50 +2045,6 @@ function syncExecutionInsets(panel: HTMLElement): void {
   updateChatHistoryScrollBottomButton(chatHistory);
 }
 
-function deriveExecutionBannerState(
-  executionPlan?: ExecutionPlan,
-): ExecutionBannerState {
-  const activeStep = executionPlan
-    ? getActiveExecutionStep(executionPlan)
-    : undefined;
-  const progressLabel = executionPlan
-    ? formatExecutionPlanProgress(executionPlan)
-    : undefined;
-
-  if (!executionPlan || executionPlan.status !== "in_progress") {
-    return {
-      kind: "idle",
-      icon: "",
-      title: "",
-      detail: "",
-    };
-  }
-
-  if (activeStep?.id?.startsWith(RECOVERY_STEP_PREFIX)) {
-    return {
-      kind: "recovering",
-      icon: "↺",
-      title: getString("chat-banner-auto-recovering"),
-      detail: activeStep.title || getString("chat-banner-auto-recovering"),
-      subdetail: activeStep.detail || executionPlan.summary,
-      statusLabel: progressLabel,
-      accentColor: "#1d4ed8",
-      accentBackground: "rgba(37, 99, 235, 0.14)",
-    };
-  }
-
-  return {
-    kind: "running",
-    icon: "…",
-    title: getString("chat-banner-running"),
-    detail: activeStep?.title || activeStep?.toolName || executionPlan.summary,
-    subdetail: activeStep?.detail || executionPlan.summary,
-    statusLabel: progressLabel,
-    accentColor: "#334155",
-    accentBackground: "rgba(100, 116, 139, 0.14)",
-  };
-}
-
 function deriveApprovalBannerState(
   _executionPlan?: ExecutionPlan,
   toolApprovalState?: ToolApprovalState,
@@ -2282,6 +2144,24 @@ function populateExecutionBannerElement(
   },
 ): void {
   wrapper.replaceChildren();
+
+  if (
+    banner.kind === "approval_resolved" ||
+    (options.showApprovalActions &&
+      banner.kind === "waiting_approval" &&
+      banner.approvalRequest)
+  ) {
+    wrapper.appendChild(
+      createToolApprovalCardElement(
+        doc,
+        theme,
+        banner as ToolApprovalCardBanner,
+        options.approvalActions,
+      ),
+    );
+    return;
+  }
+
   const isApprovalDock =
     options.showApprovalActions && banner.kind === "waiting_approval";
   const isApprovalSummary =
@@ -3275,32 +3155,6 @@ function collectUserInputResponse(
     ok: true,
     response: { answers },
   };
-}
-
-function getActiveExecutionStep(
-  plan: ExecutionPlan,
-): ExecutionPlanStep | undefined {
-  if (plan.activeStepId) {
-    const activeStep = plan.steps.find((step) => step.id === plan.activeStepId);
-    if (activeStep) return activeStep;
-  }
-
-  return (
-    plan.steps.find((step) => step.status === "in_progress") ||
-    plan.steps[plan.steps.length - 1]
-  );
-}
-
-function formatExecutionPlanProgress(plan: ExecutionPlan): string {
-  const completedCount = plan.steps.filter(
-    (step) => step.status === "completed",
-  ).length;
-  const totalCount = plan.steps.length;
-  return totalCount > 0
-    ? getString("chat-banner-progress", {
-        args: { completed: completedCount, total: totalCount },
-      })
-    : getString("chat-banner-preparing");
 }
 
 function formatApprovalSummary(

@@ -413,14 +413,15 @@ export function applyThemeToContainer(container: HTMLElement): void {
       el.style.color = theme.userBubbleText;
     });
 
-  // Update existing assistant message bubbles
+  // Update existing assistant message content (flat layout, no bubble chrome)
   container
-    .querySelectorAll(".assistant-message .chat-bubble")
+    .querySelectorAll(".assistant-message .chat-bubble--assistant-flat")
     .forEach((bubble: Element) => {
       const el = bubble as HTMLElement;
-      el.style.background = theme.assistantBubbleBg;
+      el.style.background = "transparent";
       el.style.color = theme.textPrimary;
-      el.style.borderColor = theme.borderColor;
+      el.style.border = "none";
+      el.style.boxShadow = "none";
     });
 
   // Update message action buttons

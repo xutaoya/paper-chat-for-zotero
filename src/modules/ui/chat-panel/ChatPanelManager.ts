@@ -40,12 +40,13 @@ import {
 } from "./ChatPanelTheme";
 import { createChatContainer } from "./ChatPanelBuilder";
 import {
+  finalizeAgentActivityPanel,
+  updateAgentActivityPanel,
+} from "./AgentActivityPanel";
+import {
   ensureStreamingTypingIndicator,
   getMessageMarkdownRenderOptions,
   getStreamingContentSelector,
-  getStreamingReasoningContainerSelector,
-  getStreamingReasoningSelector,
-  updateStreamingReasoningTokens,
   renderMessages as renderMessageElementsBase,
   scrollChatHistoryToBottom,
   scrollToAndHighlightMessage,
@@ -61,6 +62,7 @@ import {
   type MarkdownRenderOptions,
   type SourceGroupActionContext,
   formatMarkdownForMessageCopy,
+  messageHasAgentActivityContent,
   renderMarkdownToElement,
   stripIncompleteTrailingToolCall,
 } from "./MarkdownRenderer";
@@ -249,13 +251,21 @@ function renderStreamingTextNow(
     now - state.lastMarkdownRenderAt >= STREAMING_MARKDOWN_RENDER_INTERVAL_MS;
 
   if (shouldRenderMarkdown) {
-    const activeMarkdownOptions =
-      getMessageMarkdownRenderOptions(
+    const activeMarkdownOptions = {
+      ...(getMessageMarkdownRenderOptions(
         markdownOptions,
         activeMessage.streamingState,
         activeMessage.evidence,
         activeMessage.presentationArtifacts,
-      ) || markdownOptions;
+      ) || markdownOptions),
+      ...(messageHasAgentActivityContent(
+        activeMessage.reasoning,
+        content,
+        true,
+      )
+        ? { suppressToolCallCards: true }
+        : {}),
+    };
     renderMarkdownToElement(
       streamingEl,
       content,
@@ -268,6 +278,14 @@ function renderStreamingTextNow(
     state.lastMarkdownContent = content;
     state.lastPresentationArtifactSignature = presentationArtifactSignature;
     state.lastMarkdownRenderAt = now;
+    updateAgentActivityPanel(
+      container,
+      messageId,
+      activeMessage.reasoning || "",
+      content,
+      true,
+      activeMessage.turnUsage,
+    );
   } else if (state.lastMarkdownContent) {
     let tail = streamingEl.querySelector(
       `[${STREAMING_TEXT_TAIL_ATTR}]`,
@@ -2056,7 +2074,7 @@ function setupChatManagerCallbacks(
         );
       }
     },
-    onReasoningUpdate: (reasoning, messageId, reasoningTokens) => {
+    onReasoningUpdate: (reasoning, messageId) => {
       if (container) {
         refreshContextWindowUsageForContainer(container);
         const activeMessage = manager
@@ -2069,25 +2087,14 @@ function setupChatManagerCallbacks(
         ) {
           return;
         }
-        const reasoningEl = container.querySelector(
-          getStreamingReasoningSelector(messageId),
+        updateAgentActivityPanel(
+          container,
+          messageId,
+          reasoning,
+          activeMessage.content,
+          true,
+          activeMessage.turnUsage,
         );
-        if (reasoningEl) {
-          reasoningEl.textContent = reasoning;
-          updateStreamingReasoningTokens(
-            container,
-            reasoning,
-            messageId,
-            reasoningTokens ?? activeMessage.reasoningTokens,
-          );
-          // Show the reasoning container when content arrives
-          const reasoningContainer = container.querySelector(
-            getStreamingReasoningContainerSelector(messageId),
-          ) as HTMLElement;
-          if (reasoningContainer && reasoning) {
-            reasoningContainer.style.display = "block";
-          }
-        }
       }
     },
     onExecutionPlanUpdate: (plan) => {
@@ -2127,6 +2134,20 @@ function setupChatManagerCallbacks(
       }
     },
     onMessageComplete: async () => {
+      if (container) {
+        const lastAssistant = [...(manager.getActiveSession()?.messages || [])]
+          .reverse()
+          .find((message) => message.role === "assistant");
+        if (lastAssistant) {
+          finalizeAgentActivityPanel(
+            container,
+            lastAssistant.id,
+            lastAssistant.reasoning || "",
+            lastAssistant.content,
+            lastAssistant.turnUsage,
+          );
+        }
+      }
       void NextQuestionHintController.get(container)
         ?.requestForLatestCompletion()
         .catch((error) => {

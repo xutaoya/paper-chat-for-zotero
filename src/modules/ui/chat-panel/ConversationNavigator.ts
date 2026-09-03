@@ -31,7 +31,7 @@ const FOLLOW_THRESHOLD_PX = 56;
 const RAIL_ITEM_SIZE_PX = 14;
 const RAIL_WIDTH_PX = 32;
 const RAIL_IDLE_WIDTH_PX = 12;
-const TICK_BASE_WIDTH_PX = 28;
+const TICK_BASE_WIDTH_PX = 16;
 const IDLE_TICK_WIDTH_PX = 6;
 const IDLE_TICK_OPACITY = 0.3;
 const IDLE_ACTIVE_TICK_OPACITY = 0.72;
@@ -402,7 +402,7 @@ function updateRailTickVisuals(
     `.${NAV_TICK_BUTTON_CLASS}`,
   );
 
-  elements.ticks.style.justifyItems = engaged ? "start" : "center";
+  elements.ticks.style.justifyItems = "start";
   elements.root.style.width = engaged
     ? `${RAIL_WIDTH_PX}px`
     : `${RAIL_IDLE_WIDTH_PX}px`;
@@ -460,7 +460,7 @@ function renderRailTicks(
         justifyContent: "flex-start",
         width: "100%",
         height: `${RAIL_ITEM_SIZE_PX}px`,
-        padding: "0 0 0 2px",
+        padding: "0",
         border: "none",
         background: "transparent",
         cursor: "pointer",

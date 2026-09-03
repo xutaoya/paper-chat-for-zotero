@@ -77,12 +77,10 @@
   <!-- Main layout: Sidebar + Content -->
   <hbox flex="1" style="min-height: 400px">
     <!-- Provider Sidebar -->
-    <vbox
-      style="width: 140px; border-right: 1px solid #ddd; padding-right: 8px"
-    >
+    <vbox class="paperchat-prefs-provider-sidebar">
       <label><html:h3 data-l10n-id="pref-providers"></html:h3></label>
 
-      <vbox id="pref-provider-list" style="margin-top: 8px">
+      <vbox id="pref-provider-list">
         <!-- Provider items will be populated by JS -->
       </vbox>
 
@@ -90,12 +88,11 @@
       <button
         id="pref-add-provider-btn"
         data-l10n-id="pref-add-provider"
-        style="margin-top: 12px; cursor: pointer"
       ></button>
     </vbox>
 
     <!-- Provider Content Panel -->
-    <vbox flex="1" style="padding-left: 16px">
+    <vbox flex="1" class="paperchat-prefs-provider-content">
 
       <!-- API Key Provider Panel Template (used for OpenAI, Claude, Gemini, etc.) -->
       <vbox id="pref-panel-apikey" class="provider-panel">

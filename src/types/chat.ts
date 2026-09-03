@@ -52,6 +52,8 @@ export interface ChatMessage {
   reasoning?: string; // Reasoning/thinking chain (e.g. DeepSeek-Reasoner)
   /** Provider-reported reasoning token usage when available. */
   reasoningTokens?: number;
+  /** Accumulated provider token usage for this assistant turn. */
+  turnUsage?: ChatMessageTurnUsage;
   images?: ImageAttachment[];
   files?: FileAttachment[];
   quotedMessages?: QuotedMessageRef[];
@@ -76,6 +78,13 @@ export interface ChatMessage {
    * executions. These never come from assistant-authored markdown.
    */
   presentationArtifacts?: PresentationToolCardArtifact[];
+}
+
+export interface ChatMessageTurnUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  reasoningTokens?: number;
+  totalTokens?: number;
 }
 
 // 上下文摘要
@@ -496,7 +505,7 @@ export type OpenAIMessageContent =
 export interface StreamCallbacks {
   onChunk: (chunk: string) => void;
   onReasoningChunk?: (chunk: string) => void;
-  onUsageUpdate?: (usage: { reasoningTokens?: number }) => void;
+  onUsageUpdate?: (usage: ChatMessageTurnUsage) => void;
   onComplete: (fullContent: string, toolCalls?: ToolCall[]) => void;
   onError: (error: Error) => void;
 }
@@ -534,7 +543,7 @@ export interface StreamToolCallingCallbacks {
   onReasoningDelta?: (text: string) => void;
 
   /** Provider usage updates (e.g. reasoning token count) */
-  onUsageUpdate?: (usage: { reasoningTokens?: number }) => void;
+  onUsageUpdate?: (usage: ChatMessageTurnUsage) => void;
 
   /** Tool call 开始 */
   onToolCallStart: (toolCall: {

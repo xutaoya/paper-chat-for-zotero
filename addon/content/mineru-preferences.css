@@ -595,6 +595,27 @@
   padding: 12px 14px;
 }
 
+.mineru-pref-page--embedded .mineru-pref-config-row {
+  align-items: center;
+}
+
+.mineru-pref-page--embedded .mineru-pref-config-row > label {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+
+.mineru-pref-page--embedded .mineru-pref-config-row > checkbox {
+  margin: 0;
+}
+
+.mineru-pref-page--embedded .mineru-pref-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+}
+
 .mineru-pref-cache-details {
   margin-top: 4px;
 }

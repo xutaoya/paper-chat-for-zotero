@@ -8,7 +8,7 @@ import katex from "katex";
 import { chatColors } from "../../../utils/colors";
 import { getString } from "../../../utils/locale";
 import { HTML_NS } from "./types";
-import { isDarkMode } from "./ChatPanelTheme";
+import { isDarkMode, getCurrentTheme } from "./ChatPanelTheme";
 import type { EvidenceRecord } from "../../../types/evidence";
 import type { PresentationToolCardArtifact } from "../../../types/chat";
 import type { PresentationCardProgress } from "../../presentation/contracts";
@@ -28,6 +28,10 @@ import {
   type PresentationProgressCancelAction,
   type PresentationProgressResumeAction,
 } from "./PresentationProgressCard";
+import {
+  createSearchActivityElement,
+  isSearchToolName,
+} from "./SearchActivityElement";
 
 // Initialize markdown-it with XHTML output
 const md = new MarkdownIt({
@@ -198,34 +202,36 @@ md.use(mathPlugin);
  */
 const toolCallStyles = {
   light: {
-    cardBg: "#f6f8fa",
-    cardBorder: "#d0d7de",
-    nameBg: "#eef1f4",
-    nameText: "#24292f",
-    argsText: "#57606a",
-    statusCalling: "#bf8700",
-    statusDone: "#1a7f37",
-    statusError: "#cf222e",
-    resultBg: "#ffffff",
-    resultText: "#57606a",
+    cardBg: "rgba(15, 23, 42, 0.04)",
+    cardBorder: "rgba(15, 23, 42, 0.1)",
+    nameBg: "transparent",
+    nameText: "#3f3f46",
+    argsText: "#71717a",
+    statusCalling: "#ca8a04",
+    statusDone: "#16a34a",
+    statusError: "#dc2626",
+    resultBg: "rgba(255, 255, 255, 0.72)",
+    resultText: "#52525b",
+    headerHover: "rgba(15, 23, 42, 0.06)",
   },
   dark: {
-    cardBg: "#161b22",
-    cardBorder: "#30363d",
-    nameBg: "#21262d",
-    nameText: "#c9d1d9",
-    argsText: "#8b949e",
-    statusCalling: "#d29922",
-    statusDone: "#3fb950",
-    statusError: "#f85149",
-    resultBg: "#0d1117",
-    resultText: "#8b949e",
+    cardBg: "rgba(255, 255, 255, 0.05)",
+    cardBorder: "rgba(255, 255, 255, 0.1)",
+    nameBg: "transparent",
+    nameText: "#e4e4e7",
+    argsText: "#a1a1aa",
+    statusCalling: "#eab308",
+    statusDone: "#22c55e",
+    statusError: "#ef4444",
+    resultBg: "rgba(0, 0, 0, 0.28)",
+    resultText: "#a1a1aa",
+    headerHover: "rgba(255, 255, 255, 0.08)",
   },
 };
 
 type ToolCallCardStatus = "calling" | "completed" | "error";
 
-interface ToolCallCardData {
+export interface ParsedToolCallEntry {
   status: ToolCallCardStatus;
   expandKey?: string;
   toolName: string;
@@ -234,6 +240,8 @@ interface ToolCallCardData {
   toolResult?: string;
   presentationProgress?: PresentationCardProgress;
 }
+
+interface ToolCallCardData extends ParsedToolCallEntry {}
 
 type ToolCallFragment =
   | {
@@ -447,6 +455,8 @@ export interface MarkdownRenderOptions {
     onClick: (record: EvidenceRecord) => void | Promise<void>;
     onError?: (error: Error) => void;
   };
+  /** Hide tool-call cards; render them in Agent Activity instead. */
+  suppressToolCallCards?: boolean;
   sourceGroupContext?: SourceGroupActionContext;
 }
 
@@ -514,6 +524,41 @@ function normalizeToolCallName(toolName: string): string {
     .replace(/^[^A-Za-z0-9_-]+/u, "");
 }
 
+export function formatToolDisplayLabel(toolName: string): string {
+  const normalized = normalizeToolCallName(toolName);
+  if (!normalized) {
+    return "";
+  }
+
+  const labelKey = `tool-label-${normalized.replace(/_/g, "-")}`;
+  const localized = getString(labelKey);
+  if (localized !== `paperchat-${labelKey}`) {
+    return localized;
+  }
+
+  return normalized
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function buildToolCallStatusDot(
+  doc: Document,
+  colors: typeof toolCallStyles.light,
+  status: ToolCallCardStatus,
+): HTMLElement {
+  const dot = doc.createElementNS(HTML_NS, "span") as HTMLElement;
+  dot.className =
+    status === "calling" ? "paperchat-tool-call-dot is-calling" : "paperchat-tool-call-dot";
+  dot.style.width = "6px";
+  dot.style.height = "6px";
+  dot.style.borderRadius = "50%";
+  dot.style.flexShrink = "0";
+  dot.style.background = getToolCardStatusColor(colors, status);
+  return dot;
+}
+
 export function stripIncompleteTrailingToolCall(content: string): string {
   const lastOpen = content.lastIndexOf("<tool-call");
   if (lastOpen === -1) {
@@ -528,7 +573,43 @@ export function stripIncompleteTrailingToolCall(content: string): string {
   return content.slice(0, lastOpen);
 }
 
-function parseToolCallFragments(content: string): ToolCallFragment[] {
+export function stripToolCallMarkupFromContent(content: string): string {
+  const fragments = parseToolCallFragments(content);
+  if (fragments.length === 1 && fragments[0].kind === "markdown") {
+    return fragments[0].content;
+  }
+  return fragments
+    .filter(
+      (fragment): fragment is Extract<ToolCallFragment, { kind: "markdown" }> =>
+        fragment.kind === "markdown",
+    )
+    .map((fragment) => fragment.content)
+    .join("")
+    .trim();
+}
+
+export function messageHasAgentActivityContent(
+  reasoning: string | undefined,
+  content: string,
+  isStreaming: boolean,
+): boolean {
+  if (reasoning?.trim()) {
+    return true;
+  }
+  if (content.includes("<tool-call")) {
+    return true;
+  }
+  return isStreaming;
+}
+
+export function isPresentationToolCallEntry(
+  entry: ParsedToolCallEntry,
+): boolean {
+  const normalized = normalizeToolCallName(entry.toolName);
+  return normalized === "presentation" || Boolean(entry.presentationProgress);
+}
+
+export function parseToolCallFragments(content: string): ToolCallFragment[] {
   const stableContent = stripIncompleteTrailingToolCall(content);
   const toolCallRegex =
     /<tool-call status="(calling|completed|error)"(?: expand-key="([^"]*)")?(?: presentation-phase="([^"]*)" presentation-stage="([^"]*)" presentation-message="([^"]*)" presentation-started-at="(\d+)" presentation-stage-started-at="(\d+)" presentation-updated-at="(\d+)")?>\s*<tool-name>([^<]*)<\/tool-name>\s*(?:<tool-args>([^<]*)<\/tool-args>\s*)?<tool-status>([^<]*)<\/tool-status>\s*(?:<tool-result>([^<]*)<\/tool-result>\s*)?(?:<presentation-artifact([^>]*)>\s*([\s\S]*?)<\/presentation-artifact>\s*)?<\/tool-call>/g;
@@ -570,9 +651,9 @@ function parseToolCallFragments(content: string): ToolCallFragment[] {
         status: status as ToolCallCardStatus,
         expandKey,
         toolName,
-        toolArgs,
-        statusText,
-        toolResult,
+        toolArgs: toolArgs ? unescapeXml(toolArgs) : undefined,
+        statusText: statusText ? unescapeXml(statusText) : statusText,
+        toolResult: toolResult ? unescapeXml(toolResult) : undefined,
         presentationProgress: parsePresentationCardProgress(
           presentationPhase,
           presentationStage,
@@ -620,6 +701,15 @@ function buildToolCallCardElement(
         presentationToolCallId
     : false;
   const normalizedToolName = normalizeToolCallName(entry.toolName);
+  if (isSearchToolName(normalizedToolName)) {
+    return createSearchActivityElement(
+      doc,
+      getCurrentTheme(),
+      entry,
+      entry.expandKey || normalizedToolName,
+      entry.status === "calling" ? "active" : "complete",
+    );
+  }
   const presentationIsTerminal = Boolean(
     presentationArtifact &&
     trustedPresentationArtifact &&
@@ -697,52 +787,52 @@ function buildToolCallCardElement(
       : "";
 
   const card = doc.createElementNS(HTML_NS, "div") as HTMLElement;
-  card.style.margin = isError ? "6px 0" : "8px 0";
-  card.style.border = `1px solid ${isError ? colors.statusError : colors.cardBorder}`;
-  card.style.borderRadius = "8px";
+  card.className = "paperchat-tool-call-card";
+  card.setAttribute("data-tool-call-card", "true");
+  card.setAttribute("data-tool-status", status);
+  card.style.display = "inline-flex";
+  card.style.flexDirection = "column";
+  card.style.maxWidth = "100%";
+  card.style.margin = isError ? "4px 0" : "3px 0";
+  card.style.border = `1px solid ${isError ? colors.statusError + "55" : colors.cardBorder}`;
+  card.style.borderRadius = "10px";
   card.style.background = colors.cardBg;
   card.style.overflow = "hidden";
   card.style.fontFamily =
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif';
   card.style.fontSize = "12px";
+  card.style.lineHeight = "1.35";
 
   const header = doc.createElementNS(HTML_NS, "div") as HTMLElement;
-  header.style.display = "flex";
+  header.className = "paperchat-tool-call-header";
+  header.style.display = "inline-flex";
   header.style.alignItems = "center";
-  header.style.padding = isError ? "7px 10px" : "8px 12px";
-  header.style.background = isError ? colors.cardBg : colors.nameBg;
-  header.style.gap = "8px";
+  header.style.padding = "5px 10px";
+  header.style.gap = "7px";
+  header.style.minWidth = "0";
+  header.style.maxWidth = "100%";
   if (canToggle) {
     header.style.cursor = "pointer";
     header.style.userSelect = "none";
   }
 
-  let chevron: HTMLElement | null = null;
-  if (canToggle) {
-    chevron = doc.createElementNS(HTML_NS, "span") as HTMLElement;
-    chevron.style.fontSize = "10px";
-    chevron.style.color = colors.argsText;
-    chevron.style.transition = "transform 0.2s";
-    chevron.style.display = "inline-block";
-    chevron.textContent = "▶";
-    header.appendChild(chevron);
-  }
+  header.appendChild(buildToolCallStatusDot(doc, colors, status));
 
   const textGroup = doc.createElementNS(HTML_NS, "div") as HTMLElement;
   textGroup.style.display = "flex";
   textGroup.style.flexDirection = "column";
   textGroup.style.minWidth = "0";
   textGroup.style.flex = "1";
-  textGroup.style.gap = "2px";
+  textGroup.style.gap = "1px";
 
   const nameEl = doc.createElementNS(HTML_NS, "span") as HTMLElement;
-  nameEl.style.fontWeight = "600";
+  nameEl.style.fontWeight = "500";
   nameEl.style.color = colors.nameText;
   nameEl.style.minWidth = "0";
   nameEl.style.overflow = "hidden";
   nameEl.style.textOverflow = "ellipsis";
   nameEl.style.whiteSpace = "nowrap";
-  nameEl.textContent = unescapeXml(toolName || "");
+  nameEl.textContent = formatToolDisplayLabel(toolName || "");
   textGroup.appendChild(nameEl);
 
   if (summaryText) {
@@ -750,7 +840,7 @@ function buildToolCallCardElement(
     if (status === "calling") {
       summaryEl.setAttribute("data-tool-progress", "true");
     }
-    summaryEl.style.fontSize = "10px";
+    summaryEl.style.fontSize = "11px";
     summaryEl.style.color = colors.argsText;
     summaryEl.style.minWidth = "0";
     summaryEl.style.overflow = "hidden";
@@ -761,13 +851,30 @@ function buildToolCallCardElement(
   }
   header.appendChild(textGroup);
 
-  const statusEl = doc.createElementNS(HTML_NS, "span") as HTMLElement;
-  statusEl.style.fontSize = "11px";
-  statusEl.style.color = getToolCardStatusColor(colors, status);
-  statusEl.style.fontWeight = "500";
-  statusEl.style.flexShrink = "0";
-  statusEl.textContent = statusText || "";
-  header.appendChild(statusEl);
+  if (status === "calling" || isError) {
+    const statusEl = doc.createElementNS(HTML_NS, "span") as HTMLElement;
+    statusEl.style.fontSize = "11px";
+    statusEl.style.color = getToolCardStatusColor(colors, status);
+    statusEl.style.fontWeight = "500";
+    statusEl.style.flexShrink = "0";
+    statusEl.style.opacity = "0.92";
+    statusEl.textContent = statusText || "";
+    header.appendChild(statusEl);
+  }
+
+  let chevron: HTMLElement | null = null;
+  if (canToggle) {
+    chevron = doc.createElementNS(HTML_NS, "span") as HTMLElement;
+    chevron.className = "paperchat-tool-call-chevron";
+    chevron.style.fontSize = "11px";
+    chevron.style.color = colors.argsText;
+    chevron.style.transition = "transform 0.18s ease";
+    chevron.style.display = "inline-block";
+    chevron.style.flexShrink = "0";
+    chevron.style.opacity = "0.72";
+    chevron.textContent = "›";
+    header.appendChild(chevron);
+  }
 
   card.appendChild(header);
 
@@ -827,14 +934,12 @@ function buildToolCallCardElement(
     header.addEventListener("mouseenter", () => {
       header.style.background = isError
         ? dark
-          ? "#1f2937"
-          : "#fef2f2"
-        : dark
-          ? "#2d333b"
-          : "#e6eaef";
+          ? "rgba(239, 68, 68, 0.12)"
+          : "rgba(220, 38, 38, 0.08)"
+        : colors.headerHover;
     });
     header.addEventListener("mouseleave", () => {
-      header.style.background = isError ? colors.cardBg : colors.nameBg;
+      header.style.background = colors.nameBg;
     });
   }
 
@@ -1590,6 +1695,45 @@ function renderToolCallCards(
   const fragments = parseToolCallFragments(content);
   if (fragments.length === 1 && fragments[0].kind === "markdown") {
     return fragments[0].content;
+  }
+
+  if (options.suppressToolCallCards) {
+    let groupIndex = 0;
+    for (let i = 0; i < fragments.length; ) {
+      const fragment = fragments[i];
+      if (fragment.kind === "markdown") {
+        if (!renderSourceGroupBlocks(doc, parent, fragment.content, options)) {
+          renderMarkdownFragment(doc, parent, fragment.content, options);
+        }
+        i++;
+        continue;
+      }
+
+      const entries: ToolCallCardData[] = [];
+      while (i < fragments.length && fragments[i].kind === "tool") {
+        const entry = (
+          fragments[i] as Extract<ToolCallFragment, { kind: "tool" }>
+        ).entry;
+        if (isPresentationToolCallEntry(entry)) {
+          entries.push(entry);
+        }
+        i++;
+      }
+
+      if (entries.length > 0) {
+        renderToolCallGroup(
+          doc,
+          parent,
+          entries,
+          messageId,
+          groupIndex,
+          options,
+          renderedArtifactKeys,
+        );
+        groupIndex++;
+      }
+    }
+    return "";
   }
 
   let groupIndex = 0;

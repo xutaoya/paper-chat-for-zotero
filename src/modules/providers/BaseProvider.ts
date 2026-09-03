@@ -27,7 +27,7 @@ import {
 import { HttpResponseError } from "./HttpResponseError";
 import { sanitizeOpenAIToolCallMessages } from "./openai-tool-call-messages";
 import { getErrorMessage } from "../../utils/common";
-import { extractReasoningTokensFromUsage } from "../../utils/apiUsage";
+import { extractTurnTokenUsage } from "../../utils/apiUsage";
 import {
   isCacheCheckpointMessage,
   isPaperContextMessage,
@@ -148,9 +148,9 @@ export abstract class BaseProvider implements AIProvider {
         : undefined,
       onUsage: onUsageUpdate
         ? (usage) => {
-            const reasoningTokens = extractReasoningTokensFromUsage(usage);
-            if (reasoningTokens !== undefined) {
-              onUsageUpdate({ reasoningTokens });
+            const delta = extractTurnTokenUsage(usage);
+            if (delta) {
+              onUsageUpdate(delta);
             }
           }
         : undefined,

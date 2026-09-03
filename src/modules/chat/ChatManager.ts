@@ -64,6 +64,7 @@ import {
   getItemTitleSmart,
   generateTimestampId,
 } from "../../utils/common";
+import { applyTurnTokenUsage } from "../../utils/apiUsage";
 import {
   FailureTurnHandler,
   clearRetryableFailureState,
@@ -2172,20 +2173,17 @@ export class ChatManager {
                       );
                     }
                   },
-                  onUsageUpdate: ({ reasoningTokens }) => {
-                    if (
-                      !this.isSessionTracked(sendingSession, sessionRunId) ||
-                      reasoningTokens === undefined
-                    ) {
+                  onUsageUpdate: (delta) => {
+                    if (!this.isSessionTracked(sendingSession, sessionRunId)) {
                       return;
                     }
-                    assistantMessage.reasoningTokens = reasoningTokens;
+                    applyTurnTokenUsage(assistantMessage, delta);
                     scheduleCheckpoint();
                     if (this.isSessionActive(sendingSession)) {
                       this.onReasoningUpdate?.(
                         assistantMessage.reasoning ?? "",
                         assistantMessage.id,
-                        reasoningTokens,
+                        assistantMessage.reasoningTokens,
                       );
                     }
                   },
@@ -2790,17 +2788,29 @@ export class ChatManager {
           : getString("tool-status-error");
 
     // 解析参数用于显示
+    const normalizedToolName = toolName.trim().replace(/^[^A-Za-z0-9_-]+/u, "");
+    const isSearchTool =
+      normalizedToolName === "web_search" ||
+      normalizedToolName === "search_scholarly_sources";
     let argsDisplay = "";
     try {
       const parsed = JSON.parse(args);
-      argsDisplay = Object.entries(parsed)
-        .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-        .join(", ");
-      if (argsDisplay.length > 60) {
-        argsDisplay = argsDisplay.substring(0, 57) + "...";
+      if (isSearchTool) {
+        argsDisplay = args.trim();
+      } else {
+        argsDisplay = Object.entries(parsed)
+          .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+          .join(", ");
+        if (argsDisplay.length > 60) {
+          argsDisplay = argsDisplay.substring(0, 57) + "...";
+        }
       }
     } catch {
-      argsDisplay = args.length > 60 ? args.substring(0, 57) + "..." : args;
+      if (isSearchTool) {
+        argsDisplay = args;
+      } else {
+        argsDisplay = args.length > 60 ? args.substring(0, 57) + "..." : args;
+      }
     }
 
     // 转义所有用户输入，防止 XSS/XML 注入
@@ -2819,7 +2829,8 @@ export class ChatManager {
     const escapedPresentationMessage = presentationProgress
       ? this.escapeXml(presentationProgress.message)
       : "";
-    const resultPreviewMaxLength = options?.resultPreviewMaxLength ?? 100;
+    const resultPreviewMaxLength =
+      options?.resultPreviewMaxLength ?? (isSearchTool ? 4000 : 100);
     const escapedResult = resultPreview
       ? this.escapeXml(
           resultPreview.length > resultPreviewMaxLength

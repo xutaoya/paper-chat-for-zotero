@@ -3,7 +3,10 @@
  */
 
 import { getErrorMessage } from "../../utils/common";
-import { extractReasoningTokensFromUsage } from "../../utils/apiUsage";
+import {
+  extractReasoningTokensFromUsage,
+  extractTurnTokenUsage,
+} from "../../utils/apiUsage";
 import { BaseProvider } from "./BaseProvider";
 import type {
   ChatMessage,
@@ -917,10 +920,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
               break;
 
             case "usage_update": {
-              const reported = extractReasoningTokensFromUsage(event.usage);
-              if (reported !== undefined) {
-                reasoningTokens = reported;
-                onUsageUpdate?.({ reasoningTokens: reported });
+              const delta = extractTurnTokenUsage(event.usage);
+              if (delta) {
+                if (delta.reasoningTokens !== undefined) {
+                  reasoningTokens = delta.reasoningTokens;
+                }
+                onUsageUpdate?.(delta);
               }
               break;
             }

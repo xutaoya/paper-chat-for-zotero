@@ -172,6 +172,14 @@ paperchat-chat-edit-message-failed = 无法编辑这条消息
 
 paperchat-chat-message-edited = 已编辑
 
+paperchat-chat-time-full = { $year }年{ $month }月{ $day }日 { $time }
+
+paperchat-chat-time-same-year = { $month }月{ $day }日 { $time }
+
+paperchat-chat-time-today = 今天 { $time }
+
+paperchat-chat-time-yesterday = 昨天 { $time }
+
 paperchat-chat-copy = 复制
 
 paperchat-chat-quote-reply = 引用此回复
@@ -237,6 +245,28 @@ paperchat-chat-thinking = 思考中
 paperchat-chat-thinking-streaming = 思考中…
 
 paperchat-chat-thinking-tokens = { $tokens } tokens
+
+paperchat-chat-agent-activity-thinking = 思考中…
+
+paperchat-chat-agent-activity-summary-thought = 思考了 { $seconds } 秒
+
+paperchat-chat-agent-activity-summary-tools = 调用了 { $count } 个工具 · { $seconds } 秒
+
+paperchat-chat-agent-activity-summary-mixed = 思考并调用 { $tools } 个工具 · { $seconds } 秒
+
+paperchat-chat-agent-activity-searching-web = 正在搜索网页…
+paperchat-chat-agent-activity-searching-scholarly = 正在搜索学术资料…
+
+paperchat-chat-agent-activity-token-suffix = · { $tokens } tokens
+
+paperchat-chat-tool-result-running = 运行中
+paperchat-chat-tool-result-completed = 已完成
+paperchat-chat-tool-result-failed = 失败
+paperchat-chat-tool-result-cancelled = 已取消
+paperchat-chat-tool-result-copy = 复制结果
+paperchat-chat-tool-result-copied = 已复制
+paperchat-chat-tool-result-args-label = 参数
+paperchat-chat-tool-result-output-label = 结果
 
 paperchat-chat-history-title = 对话 { $time }
 
@@ -324,6 +354,18 @@ paperchat-tool-status-done = 完成
 
 paperchat-tool-status-error = 错误
 
+paperchat-tool-label-get-pages = 读取页面
+paperchat-tool-label-web-search = 网页搜索
+paperchat-tool-label-search-scholarly-sources = 学术搜索
+paperchat-tool-label-search-paper-content = 搜索论文
+paperchat-tool-label-search-with-regex = 正则搜索
+paperchat-tool-label-get-paper-section = 读取章节
+paperchat-tool-label-get-paper-metadata = 论文信息
+paperchat-tool-label-get-full-text = 全文读取
+paperchat-tool-label-get-outline = 目录大纲
+paperchat-tool-label-presentation = 生成演示
+paperchat-tool-label-create-note = 创建笔记
+
 paperchat-chat-tool-group-earlier = 展开更早的 { $count } 次调用
 
 paperchat-tool-error-fix-hint-label = 修复建议：
@@ -369,6 +411,19 @@ paperchat-chat-banner-session = 本会话允许
 paperchat-chat-banner-always = 始终允许
 
 paperchat-chat-banner-deny = 拒绝
+
+paperchat-chat-todo-list-aria-label = 代理任务列表
+
+paperchat-chat-todo-list-recovering-title = 恢复计划
+
+paperchat-chat-todo-list-title = 执行计划
+
+paperchat-chat-todo-list-untitled-step = 任务
+
+paperchat-chat-approval-card-title = 允许调用 { $tool }？
+paperchat-chat-approval-card-tool-label = 工具
+paperchat-chat-approval-card-risk-label = 权限
+paperchat-chat-approval-card-args-label = 参数
 
 paperchat-chat-user-input-title = 需要你选择
 
